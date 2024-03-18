@@ -6,14 +6,8 @@
 	software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
 	CONDITIONS OF ANY KIND, either express or implied.
 */
-#include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/uart.h"
-#include "driver/gpio.h"
-#include "sdkconfig.h"
+
 #include "esp_log.h"
-#include <string.h>
 #include "myUart.h"
 
 #define BUF_SIZE (1024)
@@ -28,6 +22,6 @@ static const char *TAG = "UART TEST";
 void app_main(void) {
 	initUARTs();
 	ESP_LOGI(TAG, "UART Echo Example...");
-	int aux = UART_kbHit();
+	uint8_t aux = UART_kbHit();
 	ESP_LOGI(TAG, "kbHit: %d", aux);
 }

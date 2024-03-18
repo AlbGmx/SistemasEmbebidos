@@ -25,7 +25,7 @@
 #define CARRIAGE_RETURN '\r'
 #define NULL_TERMINATOR '\0'
 
-static void initUARTs() {
+void initUARTs() {
 	uart_config_t uart_config = {
 		 .baud_rate	 = 115200,
 		 .data_bits	 = UART_DATA_8_BITS,
@@ -49,7 +49,7 @@ static void initUARTs() {
 	ESP_ERROR_CHECK(uart_driver_install(UART_PLAYERS, BUF_SIZE * 2, BUF_SIZE * 2, 10, &uart_queue, 0));
 }
 
-bool UART_kbHit(void) { return (uart_get_buffered_data_len(UART_MONITOR, NULL) > 0); }
+uint8_t UART_kbHit(void) { return (uart_get_buffered_data_len(UART_MONITOR, NULL) > 0); }
 
 char UART_getChar(void) {
 	uint8_t data;
@@ -83,6 +83,7 @@ char getChar() {
 		}
 	}
 }
+
 char *getline() {
 	static char buffer[MAX_BUFFER];
 	memset(buffer, 0, sizeof(buffer)); // Clear buffer
