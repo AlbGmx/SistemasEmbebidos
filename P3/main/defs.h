@@ -5,16 +5,18 @@
 #define PLAYER_B 1
 
 #define BUF_SIZE (24)
-#define UART_RX_PIN (3)
-#define UART_TX_PIN (1)
 
 // UART
 #define UART_MONITOR UART_NUM_0
 #define UART_PLAYERS UART_NUM_2
 #define UART_BUFFER 100
 
+#define UART_RX_PIN (3)
+#define UART_TX_PIN (1)
 #define UART_RX_PIN_2 (16)
 #define UART_TX_PIN_2 (17)
+#define MY_UART_RX 2
+#define MY_UART_TX 4
 
 #define ONE_BYTE 1
 #define ASCII_PRINTABLE_START 32
@@ -30,7 +32,7 @@ enum {
    PLAYING,
    GAME_WON,
    GAME_LOST
-}
+};
 
 enum {
   END_OF_ARRAY = 0,

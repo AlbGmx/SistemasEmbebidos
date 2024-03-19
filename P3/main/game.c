@@ -43,7 +43,7 @@ void printWord(word_t word) {
     }
 }
 
-isWordGuessed(word_t word) {
+uint8_t isWordGuessed(word_t word) {
     uint8_t i;
     for (i = 0; i < word.len; i++) {
         if (word.hits[i] == HIDDEN_CHAR) return 0;
@@ -63,5 +63,5 @@ uint8_t checkGuess(word_t word, char guess) {
 	if (found == 0) {
         word.misses++; 
     }
-	return found;
+	return word.misses>=MAX_MISSES ? 0 : 1;
 }

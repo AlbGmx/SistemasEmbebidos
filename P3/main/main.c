@@ -15,19 +15,40 @@ word_t testWord = {
 };
 
 void app_main(void) {
-	uint8_t player;
+	uint8_t player,rslt;
 	char c;
 	initUARTs();
+	
 	initCharState(testWord);
 	// Seleccionar Jugador A o B
 	player = getPlayer();
 	ESP_LOGI(TAG, "Jugador seleccionado: %c", player);
 
 	if(player == PLAYER_A){
+		//Send start instruction to player 2 via UART_2
+		putStr(UART_PLAYERS, "Start, Player 2\n");
+
 		while(testWord.misses < MAX_MISSES && !isWordGuessed(testWord)){
 			c = getChar(UART_PLAYERS);
+			rslt = checkChar(testWord, c);
+			printGraphic(testWord);
+			printWord(testWord);
+			if(rslt == 0){
+				// Perdio
+				ESP_LOGI(TAG, "Ganaste");
+				//send message to player 2 via UART_2
+				putStr(UART_PLAYERS, "Perdiste\n");
+				break;
+			}
 			
 		}
+		if(isWordGuessed(testWord)){
+			//Gano
+			ESP_LOGI(TAG, "Ganó el Player 2");
+			//send message to player 2 via UART_2
+			putStr(UART_PLAYERS, "Ganaste\n");
+		}
+		
 	}else{
       while(){
          
