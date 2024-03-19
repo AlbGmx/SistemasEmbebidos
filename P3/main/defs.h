@@ -1,20 +1,34 @@
+#ifndef DEFS
+#define DEFS
+
+// Public libraries
+
+#include <ctype.h>
+#include <stdint.h>
+#include <string.h>
+#include "esp_log.h"
+#include "sdkconfig.h"
 #include "driver/uart.h"
+#include "driver/gpio.h"
+#include "freertos/task.h"
+#include "freertos/FreeRTOS.h"
 
 // GAME
+#define MAX_MISSES 6
 #define PLAYER_A 0
 #define PLAYER_B 1
 
-#define BUF_SIZE (24)
+#define BUF_SIZE 24
 
 // UART
-#define UART_MONITOR UART_NUM_0
-#define UART_PLAYERS UART_NUM_2
-#define UART_BUFFER 100
+#define UART_CONSOLE UART_NUM_0
+#define UART_PLAYER_B UART_NUM_2
+#define UART_BUFFER 1024
 
-#define UART_RX_PIN (3)
-#define UART_TX_PIN (1)
-#define UART_RX_PIN_2 (16)
-#define UART_TX_PIN_2 (17)
+#define UART_CONSOLE_RX_PIN (3)
+#define UART_CONSOLE_TX_PIN (1)
+#define UART_PLAYER_B_RX_PIN (16)
+#define UART_PLAYER_B_TX_PIN (17)
 #define MY_UART_RX 2
 #define MY_UART_TX 4
 
@@ -25,25 +39,24 @@
 #define CARRIAGE_RETURN '\r'
 #define NULL_TERMINATOR '\0'
 
-#define MAX_MISSES 6
+enum gameState { PRE_LOAD = 0, PLAYING, GAME_WON, GAME_LOST };
 
-enum {
-   PRE_LOAD = 0,
-   PLAYING,
-   GAME_WON,
-   GAME_LOST
-};
-
-enum {
-  END_OF_ARRAY = 0,
-  HIDDEN_CHAR,
-  FOUND_CHAR,
+enum charState {
+	END_OF_ARRAY = 0,
+	HIDDEN_CHAR,
+	FOUND_CHAR,
 };
 
 typedef struct {
-  char *guessWord;
-  uint8_t hits[BUF_SIZE];
-  uint8_t len;
-  uint8_t misses;
+	char *guessWord;
+	uint8_t hits[BUF_SIZE];
+	uint8_t len;
+	uint8_t misses;
 } word_t;
 
+// Private libraries
+
+#include "game.h"
+#include "myUart.h"
+
+#endif

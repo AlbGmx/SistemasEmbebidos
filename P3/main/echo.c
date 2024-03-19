@@ -1,18 +1,11 @@
 /*
-#include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/uart.h"
-#include "driver/gpio.h"
-#include "sdkconfig.h"
-#include "esp_log.h"
-#include <string.h>
+#include "defs.h"
 
 #define BUF_SIZE (1024)
-#define UART_RX_PIN (3)
-#define UART_TX_PIN (1)
-#define UART_RX_PIN_2 (16)
-#define UART_TX_PIN_2 (17)
+#define UART_CONSOLE_RX_PIN (3)
+#define UART_CONSOLE_TX_PIN (1)
+#define UART_PLAYER_B_RX_PIN (16)
+#define UART_PLAYER_B_TX_PIN (17)
 #define MY_UART_RX 2
 #define MY_UART_TX 4
 
@@ -75,9 +68,10 @@ void app_main(void) {
 	ESP_ERROR_CHECK(uart_param_config(UART_NUM_2, &uart_config));
 
 	// Set UART pins
-	ESP_ERROR_CHECK(uart_set_pin(UART_NUM_0, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+	ESP_ERROR_CHECK(uart_set_pin(UART_NUM_0, UART_CONSOLE_TX_PIN, UART_CONSOLE_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 	ESP_ERROR_CHECK(uart_set_pin(UART_NUM_1, MY_UART_TX, MY_UART_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-	ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, UART_TX_PIN_2, UART_RX_PIN_2, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+	ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, UART_PLAYER_B_TX_PIN, UART_PLAYER_B_RX_PIN, UART_PIN_NO_CHANGE,
+UART_PIN_NO_CHANGE));
 
 	// Setup UART buffered IO with event queue
 	QueueHandle_t uart_queue;

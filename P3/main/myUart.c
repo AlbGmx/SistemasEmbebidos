@@ -1,11 +1,3 @@
-#include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/uart.h"
-#include "driver/gpio.h"
-#include "sdkconfig.h"
-#include "esp_log.h"
-#include <string.h>
 #include "defs.h"
 
 void initUARTs() {
@@ -18,25 +10,28 @@ void initUARTs() {
 		 .source_clk = UART_SCLK_DEFAULT,
 	};
 	// Configure UART parameters
-	ESP_ERROR_CHECK(uart_param_config(UART_MONITOR, &uart_config));
-	ESP_ERROR_CHECK(uart_param_config(UART_PLAYERS, &uart_config));
+	ESP_ERROR_CHECK(uart_param_config(UART_CONSOLE, &uart_config));
+	ESP_ERROR_CHECK(uart_param_config(UART_PLAYER_B, &uart_config));
 
 	// Set UART pins
-	// ESP_ERROR_CHECK(uart_set_pin(UART_PLAYERS, UART_TX_PIN_2, UART_RX_PIN_2, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+	ESP_ERROR_CHECK(
+		 uart_set_pin(UART_CONSOLE, UART_CONSOLE_TX_PIN, UART_CONSOLE_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+	ESP_ERROR_CHECK(
+		 uart_set_pin(UART_PLAYER_B, UART_PLAYER_B_TX_PIN, UART_PLAYER_B_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
-	// Install UART driver using an event queue here
-	ESP_ERROR_CHECK(uart_driver_install(UART_MONITOR, UART_BUFFER * 2, 0, 0, NULL, 0));
-	ESP_ERROR_CHECK(uart_driver_install(UART_PLAYERS, UART_BUFFER * 2, 0, 0, NULL, 0));
+	ESP_ERROR_CHECK(uart_driver_install(UART_CONSOLE, UART_BUFFER * 2, 0, 0, NULL, 0));
+	ESP_ERROR_CHECK(uart_driver_install(UART_PLAYER_B, UART_BUFFER * 2, 0, 0, NULL, 0));
 }
 
-void putChar(char c, int uartPort) { uart_write_bytes(uartPort, &c, ONE_BYTE); }
+void putChar(int uartPort, char c) { uart_write_bytes(uartPort, &c, ONE_BYTE); }
 
-void putStr(char *str, int uartPort) {
-	while (*str != '\0')
-		UART_putChar(*str++, uartPort);
+void putStr(int uartPort, char *str) {
+	while (*str) {
+		putChar(uartPort, *str++);
+	}
 }
 
-void getStr(char *str, int uartPort) {
+void getStr(int uartPort, char *str) {
 	size_t i = 0;
 	char c;
 
