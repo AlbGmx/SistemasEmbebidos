@@ -1,27 +1,53 @@
-/* UART Echo Example
-
-	This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-	Unless required by applicable law or agreed to in writing, this
-	software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-	CONDITIONS OF ANY KIND, either express or implied.
-*/
-
+#include <string.h>
+#include <inttypes.h>
 #include "esp_log.h"
 #include "myUart.h"
-
-#define BUF_SIZE (1024)
-#define UART_RX_PIN (3)
-#define UART_TX_PIN (1)
-
-#define UART_RX_PIN_2 (16)
-#define UART_TX_PIN_2 (17)
+#include "game.h"
+#include "defs.h"
 
 static const char *TAG = "UART TEST";
 
+word_t testWord = {
+	 .guessWord = "hola",
+	 .len			= 4,
+	 .hits[BUF_SIZE] = {0},
+	 .misses		= 0,
+};
+
 void app_main(void) {
+	uint8_t player;
+	char c;
 	initUARTs();
-	ESP_LOGI(TAG, "UART Echo Example...");
-	uint8_t aux = UART_kbHit();
-	ESP_LOGI(TAG, "kbHit: %d", aux);
+	initCharState(testWord);
+	// Seleccionar Jugador A o B
+	player = getPlayer();
+	ESP_LOGI(TAG, "Jugador seleccionado: %c", player);
+
+	if(player == PLAYER_A){
+		while(testWord.misses < MAX_MISSES && !isWordGuessed(testWord)){
+			c = getChar(UART_PLAYERS);
+			
+		}
+	}else{
+      while(){
+         
+         
+         
+      }
+		
+	}
+	/*
+	Spinlock UART para esperar 1 char del Jugador 2
+	getChar(){
+		//Spinlock
+		//Espera a que el jugador 2 envie un char
+		//Si el jugador 2 envia un char, lo guarda en una variable
+		//Desbloquea el spinlock
+
+	}
+
+	Verificar si el char existe en la palabra
+
+	Actualiza el estado del juego e imprime
+	*/
 }

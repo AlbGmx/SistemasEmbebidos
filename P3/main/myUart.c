@@ -6,24 +6,7 @@
 #include "sdkconfig.h"
 #include "esp_log.h"
 #include <string.h>
-
-#define BUF_SIZE (1024)
-#define UART_RX_PIN (3)
-#define UART_TX_PIN (1)
-
-#define UART_MONITOR UART_NUM_0
-#define UART_PLAYERS UART_NUM_2
-#define MAX_BUFFER 100
-
-#define UART_RX_PIN_2 (16)
-#define UART_TX_PIN_2 (17)
-
-#define ONE_BYTE 1
-#define ASCII_PRINTABLE_START 32
-#define ASCII_PRINTABLE_END 126
-#define NEWLINE '\n'
-#define CARRIAGE_RETURN '\r'
-#define NULL_TERMINATOR '\0'
+#include "defs.h"
 
 void initUARTs() {
 	uart_config_t uart_config = {
@@ -39,57 +22,46 @@ void initUARTs() {
 	ESP_ERROR_CHECK(uart_param_config(UART_PLAYERS, &uart_config));
 
 	// Set UART pins
-	ESP_ERROR_CHECK(uart_set_pin(UART_MONITOR, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-	ESP_ERROR_CHECK(uart_set_pin(UART_PLAYERS, UART_TX_PIN_2, UART_RX_PIN_2, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+	// ESP_ERROR_CHECK(uart_set_pin(UART_PLAYERS, UART_TX_PIN_2, UART_RX_PIN_2, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
-	// Setup UART buffered IO with event queue
-	QueueHandle_t uart_queue;
 	// Install UART driver using an event queue here
-	ESP_ERROR_CHECK(uart_driver_install(UART_MONITOR, BUF_SIZE * 2, BUF_SIZE * 2, 10, &uart_queue, 0));
-	ESP_ERROR_CHECK(uart_driver_install(UART_PLAYERS, BUF_SIZE * 2, BUF_SIZE * 2, 10, &uart_queue, 0));
+	ESP_ERROR_CHECK(uart_driver_install(UART_MONITOR, UART_BUFFER * 2, 0, 0, NULL, 0));
+	ESP_ERROR_CHECK(uart_driver_install(UART_PLAYERS, UART_BUFFER * 2, 0, 0, NULL, 0));
 }
 
-uint8_t UART_kbHit(void) { return (uart_get_buffered_data_len(UART_MONITOR, NULL) > 0); }
+void putChar(char c, int uartPort) { uart_write_bytes(uartPort, &c, ONE_BYTE); }
 
-char UART_getChar(void) {
-	uint8_t data;
-	int len = uart_read_bytes(UART_MONITOR, &data, ONE_BYTE, 20 / portTICK_PERIOD_MS);
-	return data;
-}
-
-void UART_putChar(char c) { uart_write_bytes(UART_MONITOR, &c, ONE_BYTE); }
-
-void UART_puts(char *str) {
+void putStr(char *str, int uartPort) {
 	while (*str != '\0')
-		UART_putChar(*str++);
+		UART_putChar(*str++, uartPort);
 }
 
-void UART_gets(char *str) {
+void getStr(char *str, int uartPort) {
 	size_t i = 0;
 	char c;
 
-	while (uart_read_bytes(UART_MONITOR, (uint8_t *)&c, 1, portMAX_DELAY) != CARRIAGE_RETURN) {
+	while (uart_read_bytes(uartPort, (uint8_t *)&c, 1, portMAX_DELAY) != CARRIAGE_RETURN) {
 		if (c >= ASCII_PRINTABLE_START && c <= ASCII_PRINTABLE_END && i < BUF_SIZE - 1) str[i++] = c;
 	}
 	str[i] = NULL_TERMINATOR;
 }
 
-char getChar() {
+char getChar(int uartPort) {
 	uint8_t data = 0;
 	while (1) {
-		int len = uart_read_bytes(UART_MONITOR, &data, 1, portMAX_DELAY);
+		int len = uart_read_bytes(uartPort, &data, 1, portMAX_DELAY);
 		if (len == 1) {
 			return (char)data;
 		}
 	}
 }
 
-char *getline() {
-	static char buffer[MAX_BUFFER];
+char *getLine(int uartPort) {
+	static char buffer[BUF_SIZE];
 	memset(buffer, 0, sizeof(buffer)); // Clear buffer
 	int index = 0;
 	while (1) {
-		char c = getChar();
+		char c = getChar(uartPort);
 		if (c == '\n' || c == '\r') {
 			printf("\n"); // Print newline
 			break;
@@ -98,7 +70,7 @@ char *getline() {
 				index--;
 				printf("\b \b"); // Move cursor back, erase character, move cursor back again
 			}
-		} else if (index < MAX_BUFFER - 1) {
+		} else if (index < BUF_SIZE - 1) {
 			buffer[index++] = c;
 			printf("%c", c); // Echo character
 		}

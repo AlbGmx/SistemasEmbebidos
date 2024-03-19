@@ -1,6 +1,8 @@
-uint8_t UART_kbHit(void);
-char UART_getChar(void);
-void UART_putChar(char c);
-void UART_puts(char *str);
-void UART_gets(char *str);
+#include "defs.h"
+
 void initUARTs(void);
+char getChar(int);
+void putChar(char, int);
+void putStr(char *, int);
+void getStr(char *, int);
+char *getLine(int);
