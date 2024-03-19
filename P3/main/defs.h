@@ -22,7 +22,7 @@
 
 // UART
 #define UART_CONSOLE UART_NUM_0
-#define UART_PLAYER_B UART_NUM_2
+#define UART_ESP UART_NUM_2
 #define UART_BUFFER 1024
 
 #define UART_CONSOLE_RX_PIN (3)
@@ -39,10 +39,24 @@
 #define CARRIAGE_RETURN '\r'
 #define NULL_TERMINATOR '\0'
 
-enum gameState { PRE_LOAD = 0, PLAYING, GAME_WON, GAME_LOST };
+enum gameState {
+	PRE_LOAD = 0,
+	PLAYING,
+	GAME_WON,
+	GAME_LOST,
+};
 
-enum charState {
-	END_OF_ARRAY = 0,
+enum guessState {
+	WORD_NOT_GUESSED,
+	WORD_GUESSED,
+	LETTER_FOUND,
+	LETTER_ALREADY_GUESSED,
+	NO_CHANGE,
+	NO_TRIES_LEFT,
+};
+
+enum wordState {
+	END_OF_ARRAY,
 	HIDDEN_CHAR,
 	FOUND_CHAR,
 };
@@ -52,10 +66,10 @@ typedef struct {
 	uint8_t hits[BUF_SIZE];
 	uint8_t len;
 	uint8_t misses;
+	uint8_t lettersGuessed[MAX_MISSES];
 } word_t;
 
 // Private libraries
-
 #include "game.h"
 #include "myUart.h"
 

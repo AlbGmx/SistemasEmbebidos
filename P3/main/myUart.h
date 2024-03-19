@@ -3,6 +3,7 @@
 #include "defs.h"
 
 void initUARTs(void);
+void clearScreen(void);
 char getChar(int);
 void putChar(int, char);
 void putStr(int, char *);

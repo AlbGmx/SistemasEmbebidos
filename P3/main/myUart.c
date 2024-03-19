@@ -11,16 +11,16 @@ void initUARTs() {
 	};
 	// Configure UART parameters
 	ESP_ERROR_CHECK(uart_param_config(UART_CONSOLE, &uart_config));
-	ESP_ERROR_CHECK(uart_param_config(UART_PLAYER_B, &uart_config));
+	ESP_ERROR_CHECK(uart_param_config(UART_ESP, &uart_config));
 
 	// Set UART pins
 	ESP_ERROR_CHECK(
 		 uart_set_pin(UART_CONSOLE, UART_CONSOLE_TX_PIN, UART_CONSOLE_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 	ESP_ERROR_CHECK(
-		 uart_set_pin(UART_PLAYER_B, UART_PLAYER_B_TX_PIN, UART_PLAYER_B_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+		 uart_set_pin(UART_ESP, UART_PLAYER_B_TX_PIN, UART_PLAYER_B_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
 	ESP_ERROR_CHECK(uart_driver_install(UART_CONSOLE, UART_BUFFER * 2, 0, 0, NULL, 0));
-	ESP_ERROR_CHECK(uart_driver_install(UART_PLAYER_B, UART_BUFFER * 2, 0, 0, NULL, 0));
+	ESP_ERROR_CHECK(uart_driver_install(UART_ESP, UART_BUFFER * 2, 0, 0, NULL, 0));
 }
 
 void putChar(int uartPort, char c) { uart_write_bytes(uartPort, &c, ONE_BYTE); }
@@ -35,7 +35,7 @@ void getStr(int uartPort, char *str) {
 	size_t i = 0;
 	char c;
 
-	while (uart_read_bytes(uartPort, (uint8_t *)&c, 1, portMAX_DELAY) != CARRIAGE_RETURN) {
+	while (uart_read_bytes(uartPort, (uint8_t *)&c, ONE_BYTE, portMAX_DELAY) != CARRIAGE_RETURN) {
 		if (c >= ASCII_PRINTABLE_START && c <= ASCII_PRINTABLE_END && i < BUF_SIZE - 1) str[i++] = c;
 	}
 	str[i] = NULL_TERMINATOR;
@@ -44,7 +44,7 @@ void getStr(int uartPort, char *str) {
 char getChar(int uartPort) {
 	uint8_t data = 0;
 	while (1) {
-		int len = uart_read_bytes(uartPort, &data, 1, portMAX_DELAY);
+		int len = uart_read_bytes(uartPort, &data, ONE_BYTE, portMAX_DELAY);
 		if (len == 1) {
 			return (char)data;
 		}
@@ -69,8 +69,11 @@ char *getLine(int uartPort) {
 			buffer[index++] = c;
 			printf("%c", c); // Echo character
 		}
+		fflush(stdout);
 	}
-	fflush(stdout);
+	printf("\n");			 // Print newline
 	buffer[index] = '\0'; // Null-terminate the string
 	return buffer;
 }
+
+void clearScreen() { putStr(UART_CONSOLE, "\033[2J\033[H"); }
