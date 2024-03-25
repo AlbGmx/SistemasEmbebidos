@@ -40,10 +40,10 @@
 #define NULL_TERMINATOR '\0'
 
 enum gameState {
-	PRE_LOAD = 0,
-	PLAYING,
+	PLAYING = '=', // Random values to avoid false positives from trash data
 	GAME_WON,
 	GAME_LOST,
+	PRE_LOAD,
 };
 
 enum guessState {
@@ -66,7 +66,8 @@ typedef struct {
 	uint8_t hits[BUF_SIZE];
 	uint8_t len;
 	uint8_t misses;
-	uint8_t lettersGuessed[MAX_MISSES];
+	uint8_t guesses;
+	uint8_t lettersTried[MAX_MISSES];
 } word_t;
 
 // Private libraries
