@@ -80,5 +80,5 @@ void app_main(void) {
          sendGameState(playAgain);
       }
    } while (playAgain);
-   putStr(UART_CONSOLE, "\n\rGracias por jugar!\n");
+   putStr(UART_CONSOLE, "\n\rGracias por jugar!");
 }
