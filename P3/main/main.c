@@ -57,7 +57,7 @@ void app_main(void) {
             sendGameState(GAME_WON);
          }
 
-         putStr(UART_CONSOLE, "\n\rEsperando si Jugador B quiere jugar de nuevo!\n");
+         putStr(UART_CONSOLE, "\n\rEsperando si Jugador B quiere jugar de nuevo...");
          playAgain = getChar(UART_ESP);
       } else {
          putStr(UART_CONSOLE, "\n\rEsperando al Jugador A... ");
