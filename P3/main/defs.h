@@ -2,7 +2,6 @@
 #define DEFS
 
 // Public libraries
-
 #include <ctype.h>
 #include <stdint.h>
 #include <string.h>
@@ -40,34 +39,34 @@
 #define NULL_TERMINATOR '\0'
 
 enum gameState {
-	PLAYING = '=', // Random values to avoid false positives from trash data
-	GAME_WON,
-	GAME_LOST,
-	PRE_LOAD,
+   PLAYING = '=', // Random values to reduce false positives from trash data
+   GAME_WON,
+   GAME_LOST,
+   PRE_LOAD,
 };
 
 enum guessState {
-	WORD_NOT_GUESSED,
-	WORD_GUESSED,
-	LETTER_FOUND,
-	LETTER_ALREADY_GUESSED,
-	NO_CHANGE,
-	NO_TRIES_LEFT,
+   WORD_NOT_GUESSED,
+   WORD_GUESSED,
+   LETTER_FOUND,
+   LETTER_ALREADY_GUESSED,
+   NO_CHANGE,
+   NO_TRIES_LEFT,
 };
 
 enum wordState {
-	END_OF_ARRAY,
-	HIDDEN_CHAR,
-	FOUND_CHAR,
+   END_OF_ARRAY,
+   HIDDEN_CHAR,
+   FOUND_CHAR,
 };
 
 typedef struct {
-	char *guessWord;
-	uint8_t hits[BUF_SIZE];
-	uint8_t len;
-	uint8_t misses;
-	uint8_t guesses;
-	uint8_t lettersTried[MAX_MISSES];
+   char *guessWord;
+   uint8_t hits[BUF_SIZE];
+   uint8_t len;
+   uint8_t misses;
+   uint8_t guesses;
+   uint8_t lettersTried[MAX_MISSES];
 } word_t;
 
 // Private libraries

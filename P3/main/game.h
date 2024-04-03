@@ -14,7 +14,8 @@ char getValidStateFromPlayerA();
 uint8_t isValidGuess(char);
 uint8_t isWordGuessed(word_t);
 uint8_t checkGuess(word_t *, char);
-uint8_t updatePlayersStates(uint8_t resultado);
+uint8_t updatePlayersStates(uint8_t);
+char *getWordToGuess();
 
 // Prints
 void printWord(word_t);
