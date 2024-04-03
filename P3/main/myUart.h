@@ -1,6 +1,7 @@
+#include "defs.h"
+
 #ifndef MYUART
 #define MYUART
-#include "defs.h"
 
 void initUARTs(void);
 
