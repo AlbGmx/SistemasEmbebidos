@@ -15,16 +15,16 @@
 #define BALL 'o'
 #define PADDLE '='
 #define BORDER_WIDTH 1
-#define CONSOLE_HEIGHT 25
+#define CONSOLE_HEIGHT 30
 #define CONSOLE_WIDTH 40
 #define PADDLE_SIZE 5
 #define PADDLE_SYMBOL PADDLE
 #define BALL_SYMBOL BALL
 #define BALL_SPEED 1
-#define PADDLE_SPEED 3
+#define PADDLE_SPEED 2
 #define BALL_INITIAL_X CONSOLE_WIDTH / 2
 #define BALL_INITIAL_Y CONSOLE_HEIGHT / 2
-#define PADDLE_FIXED_Y CONSOLE_HEIGHT - PADDLE_SIZE
+#define PADDLE_FIXED_Y CONSOLE_HEIGHT - 2
 #define PADDLE_INITIAL_X CONSOLE_WIDTH / 2 - PADDLE_SIZE / 2
 #define MINIMUM_DELAY_MS 1
 #define BUTTON_BOUNCE_TIME 20
@@ -44,7 +44,7 @@
 // Buttons
 #define BUTTON_LEFT GPIO_NUM_18
 #define BUTTON_RIGHT GPIO_NUM_22
-#define BUTTON_END GPIO_NUM_23
+#define BUTTON_END GPIO_NUM_19
 // LEDs
 #define LED_DEBUG GPIO_NUM_2
 #define LED_1S GPIO_NUM_13
@@ -54,7 +54,15 @@
 #define LED_16S GPIO_NUM_26
 #define LED_32S GPIO_NUM_25
 
-typedef struct {
+// Game States
+typedef enum GameStates {
+   STATE_INGAME = 0,
+   STATE_GAME_LOST,
+   STATE_GAME_ENDED
+} game_states_t;
+
+
+typedef struct Paddle{
    uint8_t x;
    uint8_t y;
    uint8_t last_x;
@@ -63,7 +71,7 @@ typedef struct {
    char symbol;
 } paddle_t;
 
-typedef struct {
+typedef struct Ball{
    uint8_t x;
    uint8_t y;
    int8_t last_x;
@@ -73,12 +81,13 @@ typedef struct {
    char symbol;
 } ball_t;
 
-typedef struct {
+typedef struct GameElements{
    paddle_t paddle;
    ball_t ball;
 } game_elements_t;
 
-void endTask(bool*);
+void gameLostTask(game_states_t*);
+void gameEndedTask(game_states_t*);
 void displayPointsTask(uint64_t*);
 void deletePaddle(paddle_t*);
 void printPaddle(paddle_t*);
@@ -89,5 +98,6 @@ void updateBall(ball_t*);
 void calculateBallCollisionsTask(game_elements_t*);
 void renderGameTask(game_elements_t*);
 void printOutline();
+void printOutlineTask();
 
 #endif

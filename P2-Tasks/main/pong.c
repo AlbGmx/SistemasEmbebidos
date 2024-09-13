@@ -4,36 +4,41 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "math.h"
+#include "freertos/event_groups.h"
+
 #define TAG "Pong"
 
 extern EventGroupHandle_t xGameEventSync;
 extern uint64_t points;
 
 void renderGameTask(game_elements_t* elements) {
-   bool inGame = true;
+   game_states_t gameState = STATE_INGAME;
    hideCursor();
    clearScreen();
    printOutline();
    xTaskCreatePinnedToCore((TaskFunction_t)calculateBallCollisionsTask, "BallPositionTask", 2048, elements, 1, NULL,
                            xPortGetCoreID());
-   xTaskCreatePinnedToCore((TaskFunction_t)endTask, "End Task", 2048, &inGame, 1, NULL, xPortGetCoreID());
-   while (inGame) {
-      goToXY((CONSOLE_WIDTH / 2) - 6, 0);
-      printf("---\n");
+   xTaskCreatePinnedToCore((TaskFunction_t)gameLostTask, "End Task", 2048, &gameState, 1, NULL, xPortGetCoreID());
+   xTaskCreatePinnedToCore((TaskFunction_t)gameEndedTask, "End Task", 2048, &gameState, 1, NULL, xPortGetCoreID());
+   while (gameState == STATE_INGAME) {
+      goToXY(elements->paddle.x, elements->paddle.y);
+      printf("\n");
+      delayMillis(1);
       updatePaddle(&(elements->paddle));
       updateBall(&(elements->ball));
-      delayMillis(1);
    }
+   goToXY(CONSOLE_WIDTH / 2 - 12, (CONSOLE_HEIGHT / 2) + 1);
+   printf("Points %3lld\n", points);
    vTaskDelete(NULL);
 }
 
 void displayPointsTask(uint64_t* points) {
    while (true) {
       // display the points USING 5 LEDs in binary
-      gpio_set_level(LED_1S, *points & 0x01);
-      gpio_set_level(LED_2S, *points & 0x02);
-      gpio_set_level(LED_4S, *points & 0x04);
-      gpio_set_level(LED_8S, *points & 0x08);
+      gpio_set_level(LED_1S,  *points & 0x01);
+      gpio_set_level(LED_2S,  *points & 0x02);
+      gpio_set_level(LED_4S,  *points & 0x04);
+      gpio_set_level(LED_8S,  *points & 0x08);
       gpio_set_level(LED_16S, *points & 0x10);
       delayMillis(100);
    }
@@ -81,6 +86,7 @@ void printOutline() {
                }
          }
       }
+      printf("\n");
    }
 }
 
@@ -95,15 +101,12 @@ void calculateBallCollisionsTask(game_elements_t* gameElements) {
       // Ball Going Right
       if (gameElements->ball.horizontal_direction == MOVING_RIGHT) {
          if (gameElements->ball.x > CONSOLE_WIDTH - BORDER_WIDTH - BALL_STEP_SIZE) {
-            // Bounce
             gameElements->ball.horizontal_direction = MOVING_LEFT;
          }
       }
       // Ball Going Left
       else if (gameElements->ball.horizontal_direction == MOVING_LEFT) {
-         // Enough space to move left
          if (gameElements->ball.x < BALL_STEP_SIZE + BORDER_WIDTH)
-            // Bounce
             gameElements->ball.horizontal_direction = MOVING_RIGHT;
       }
 
@@ -113,7 +116,6 @@ void calculateBallCollisionsTask(game_elements_t* gameElements) {
             // End Game
             xEventGroupSetBits(xGameEventSync, GAME_LOST);
             vTaskDelete(NULL);
-            gameElements->ball.vertical_direction = MOVING_UP;
             // Paddle Collision
          } else if (gameElements->ball.y == gameElements->paddle.y && gameElements->ball.x >= gameElements->paddle.x &&
                     gameElements->ball.x <= gameElements->paddle.x + gameElements->paddle.size) {
@@ -133,33 +135,41 @@ void calculateBallCollisionsTask(game_elements_t* gameElements) {
       gameElements->ball.y += BALL_STEP_SIZE * (gameElements->ball.vertical_direction == MOVING_DOWN ? 1 : -1);
 
       uint64_t delay = BALL_UPDATE_DELAY / ((points + 1) < 1 ? 1 : points + 1);
-      delayMillis((delay < MINIMUM_DELAY_MS) ? MINIMUM_DELAY_MS : delay);
+      delayMillis(delay);
    }
 }
 
-void endTask(bool* endGame) {
+void gameLostTask(game_states_t* endGame) {
    xEventGroupWaitBits(xGameEventSync, (GAME_LOST), pdTRUE, pdTRUE, portMAX_DELAY);
-   *endGame = false;
+   *endGame = GAME_LOST;
    goToXY(CONSOLE_WIDTH / 2 - 12, CONSOLE_HEIGHT / 2);
-   printf("Game Over: Points %3lld\n", points);
+   printf("Suerte para la proxima:");
+   vTaskDelete(NULL);
+}
+
+void gameEndedTask(game_states_t* endGame) {
+   xEventGroupWaitBits(xGameEventSync, (GAME_ENDED), pdTRUE, pdTRUE, portMAX_DELAY);
+   *endGame = GAME_ENDED;
+   goToXY(CONSOLE_WIDTH / 2 - 12, CONSOLE_HEIGHT / 2);
+   printf("Hasta Luego");
    vTaskDelete(NULL);
 }
 
 void printBall(ball_t* ball) {
    goToXY(ball->x, ball->y);
    printf("%c", ball->symbol);
+   ball->last_x = ball->x;
+   ball->last_y = ball->y;
 }
 
 void updateBall(ball_t* ball) {
    deleteBall(ball);
    printBall(ball);
-   ball->last_x = ball->x;
-   ball->last_y = ball->y;
 }
 
 void deletePaddle(paddle_t* paddle) {
    goToXY(paddle->last_x, paddle->y);
-   for (int i = 0; i <= paddle->size; i++) {
+   for (int i = 0; i < paddle->size; i++) {
       printf(" ");
    }
 }
@@ -172,9 +182,9 @@ void printPaddle(paddle_t* paddle) {
 }
 
 void updatePaddle(paddle_t* paddle) {
-   if (paddle->x == paddle->last_x) {
-      return;
-   }
+   // if (paddle->x == paddle->last_x) {
+   //    return;
+   // }
    deletePaddle(paddle);
    printPaddle(paddle);
    paddle->last_x = paddle->x;

@@ -20,6 +20,7 @@ game_elements_t gameElements = {
                .size = PADDLE_SIZE,
                .speed = PADDLE_SPEED,
                .symbol = PADDLE_SYMBOL},
+
     .ball = {.x = BALL_INITIAL_X,
              .y = BALL_INITIAL_Y,
              .last_x = 1,
@@ -36,7 +37,7 @@ void configGPIOs() {
 
    io_conf.intr_type = GPIO_INTR_NEGEDGE;
    io_conf.mode = GPIO_MODE_INPUT;
-   io_conf.pin_bit_mask = (1 << BUTTON_LEFT) | (1 << BUTTON_RIGHT) | (1 << BUTTON_END);
+   io_conf.pin_bit_mask = (1 << BUTTON_LEFT) | (1 << BUTTON_END) | (1 << BUTTON_RIGHT) ;
    io_conf.pull_down_en = 1;
    io_conf.pull_up_en = 0;
    gpio_config(&io_conf);
@@ -94,9 +95,9 @@ void configInterruptions() {
    xTaskCreate(movePaddle, "Move Paddle Task", 2048, NULL, 1, NULL);
 
    gpio_install_isr_service(0);
-   gpio_isr_handler_add(BUTTON_LEFT, buttonInterruptHandler, (void *)BUTTON_LEFT);
+   gpio_isr_handler_add(BUTTON_LEFT,  buttonInterruptHandler, (void *)BUTTON_LEFT);
+   gpio_isr_handler_add(BUTTON_END,   buttonInterruptHandler, (void *)BUTTON_END);
    gpio_isr_handler_add(BUTTON_RIGHT, buttonInterruptHandler, (void *)BUTTON_RIGHT);
-   gpio_isr_handler_add(BUTTON_END, buttonInterruptHandler, (void *)BUTTON_END);
 }
 
 void startGame() {

@@ -2,3 +2,5 @@
 */build/
 */.vscode/
 */.DS_Store
+Kconfig.projbuild
+.DS_Store

@@ -14,8 +14,7 @@ void initializeUart() {
        .data_bits = UART_DATA_8_BITS,
        .parity = UART_PARITY_DISABLE,
        .stop_bits = UART_STOP_BITS_2,
-       .flow_ctrl = UART_HW_FLOWCTRL_RTS,
-       .rx_flow_ctrl_thresh = 122,
+       .source_clk = UART_SCLK_APB,
    };
    ESP_ERROR_CHECK(uart_param_config(UART_NUM_0, &uart_config));
 }
