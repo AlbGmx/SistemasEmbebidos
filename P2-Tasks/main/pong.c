@@ -151,7 +151,7 @@ void gameEndedTask(game_states_t* endGame) {
    xEventGroupWaitBits(xGameEventSync, (GAME_ENDED), pdTRUE, pdTRUE, portMAX_DELAY);
    *endGame = GAME_ENDED;
    goToXY(CONSOLE_WIDTH / 2 - 12, CONSOLE_HEIGHT / 2);
-   printf("Hasta Luego");
+   printf("Hasta Luego :)");
    vTaskDelete(NULL);
 }
 

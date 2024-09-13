@@ -113,5 +113,5 @@ void app_main() {
    gameElements.ball.x = esp_random() % CONSOLE_WIDTH;
    startGame();
    xGameEventSync = xEventGroupCreate();
-   xEventGroupWaitBits(xGameEventSync, GAME_ENDED, pdTRUE, pdTRUE, portMAX_DELAY);
+   xEventGroupWaitBits(xGameEventSync, ALL_EVENTS, pdTRUE, pdTRUE, portMAX_DELAY);
 }

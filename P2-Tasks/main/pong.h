@@ -4,6 +4,10 @@
 #include "console.h"
 #include "driver/gpio.h"
 
+//Console Size
+#define CONSOLE_HEIGHT 30
+#define CONSOLE_WIDTH 40
+
 // ASCII Chars
 #define FLOOR '-'
 #define CEILING FLOOR
@@ -15,8 +19,6 @@
 #define BALL 'o'
 #define PADDLE '='
 #define BORDER_WIDTH 1
-#define CONSOLE_HEIGHT 30
-#define CONSOLE_WIDTH 40
 #define PADDLE_SIZE 5
 #define PADDLE_SYMBOL PADDLE
 #define BALL_SYMBOL BALL
@@ -29,7 +31,7 @@
 #define MINIMUM_DELAY_MS 1
 #define BUTTON_BOUNCE_TIME 20
 #define RELEASED 1
-#define BALL_UPDATE_DELAY 1000
+#define BALL_UPDATE_DELAY 500
 #define BALL_STEP_SIZE 1
 #define BALL_STOPPED 0
 #define MOVING_RIGHT true
