@@ -75,7 +75,15 @@ char *get_line(uint8_t uartPort) {
 
 void print_ascii_art(uint8_t uartPort, char *str) {
    clear_screen(uartPort);
-   uint8_t x_pos = 0, y_pos = 0;
+   go_to_XY(uartPort, 0, 0);
+   char *aux = (char *)malloc(BUFFER_SIZE);
+   snprintf(aux, BUFFER_SIZE,
+            "Minimum console size as set in program: %dx%d"
+            "\nEquivalent to:\t%d letters per line and %d lines"
+            "\nWaiting for data...\n",
+            CONSOLE_WIDTH, CONSOLE_HEIGHT, DESIRED_LETTERS_PER_LINE, DESIRED_LINES);
+   put_str(uartPort, aux);
+   uint8_t x_pos = 0, y_pos = ASCII_FONT_HEIGHT;
    while (*str) {
       char nextChar = *str++;
       switch (get_char_type(nextChar)) {
@@ -109,7 +117,7 @@ void print_ascii_art(uint8_t uartPort, char *str) {
 
       print_single_ascii_art(x_pos, y_pos, (uint8_t)nextChar);
       x_pos += ASCII_FONT_WIDTH;
-      if (x_pos >= CONSOLE_WIDTH - ASCII_FONT_WIDTH) {
+      if (x_pos > CONSOLE_WIDTH - ASCII_FONT_WIDTH) {
          x_pos = 0;
          y_pos += ASCII_FONT_HEIGHT + TWO_SPACES;
       }
