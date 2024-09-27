@@ -24,9 +24,9 @@ void app_main(void) {
    char *data = (char *)malloc(BUFFER_SIZE);
 
    // Set mode
-   uint8_t uartReceiving = (gpio_get_level(IS_RECEIVER_CONTROL_PIN) == 0) ? UART_NUM_0 : UART_NUM_2;
-   uint8_t uartTransmitting = (uartReceiving == UART_NUM_0) ? UART_NUM_2 : UART_NUM_0;
-   if (uartReceiving == UART_NUM_2) isReceiver = true;
+   isReceiver = (gpio_get_level(IS_RECEIVER_CONTROL_PIN) == 1);
+   uint8_t uartReceiving = (isReceiver) ? UART_ESP : UART_CONSOLE;
+   uint8_t uartTransmitting = (!isReceiver) ? UART_ESP : UART_CONSOLE;
    gpio_set_level(SHOW_MODE_PIN, isReceiver);
    ESP_LOGI(TAG, "Receiving on UART%d, Transmitting on UART%d", uartReceiving, uartTransmitting);
 
