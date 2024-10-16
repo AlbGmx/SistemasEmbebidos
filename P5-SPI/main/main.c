@@ -29,6 +29,20 @@ static esp_err_t s_example_write_file(const char *path, char *data) {
    return ESP_OK;
 }
 
+uint8_t getLoopEndingChar(char *str) {
+   uint8_t auxIndex = 0;
+   uint8_t openBrackets = 1;
+   while (openBrackets > 0) {
+      if (*(str + auxIndex) == '[') {
+         openBrackets++;
+      } else if (*(str + auxIndex) == ']') {
+         openBrackets--;
+      }
+      auxIndex++;
+   }
+   return auxIndex;
+}
+
 void print_recursion_string(char **str) {
    uint8_t iterations = 0;
    uint8_t auxIndex = 0;
@@ -49,7 +63,7 @@ void print_recursion_string(char **str) {
 
       while ((*(*str + auxIndex)) != ']' && *(*str + auxIndex) != '\0') {
          if (*(*str + auxIndex) == '[') {
-            while ((*(*str + auxIndex)) != ']' && *(*str + auxIndex) != '\0') auxIndex++;
+            auxIndex = getLoopEndingChar(*str + auxIndex);
          } else
             auxIndex++;
       }
