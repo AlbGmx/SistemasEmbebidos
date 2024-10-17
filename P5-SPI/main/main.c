@@ -29,68 +29,95 @@ static esp_err_t s_example_write_file(const char *path, char *data) {
    return ESP_OK;
 }
 
-uint8_t getLoopEndingChar(char *str) {
-   uint8_t auxIndex = 0;
-   uint8_t openBrackets = 1;
+int getLoopEndingChar(char *str) {
+   int8_t auxIndex = 0;
+   int8_t openBrackets = 1;
    while (openBrackets > 0) {
+      // ESP_LOGI(TAG, "FOUND %c, %x", *(str + auxIndex), *(str + auxIndex));
       if (*(str + auxIndex) == '[') {
+         // ESP_LOGW(TAG, "FOUND [");
          openBrackets++;
       } else if (*(str + auxIndex) == ']') {
+         // ESP_LOGW(TAG, "FOUND ]");
          openBrackets--;
+      } else if (*(str + auxIndex) == 0) {
+         // ESP_LOGE(TAG, "FOUND %c, %x, loops: %d", *(str + auxIndex),
+         //          *(str + auxIndex), openBrackets);
+         return -1;
       }
       auxIndex++;
    }
-   return auxIndex;
+   return auxIndex - 1;
 }
 
-void print_recursion_string(char **str) {
+int8_t print_recursion_string(char *str) {
    uint8_t iterations = 0;
-   uint8_t auxIndex = 0;
-   if (**str == '[') {
-      (*str)++;
-      print_recursion_string(&str);
-   } else {
-      // get the number of iterations
-      while (**str >= '0' && **str <= '9') {
-         ESP_LOGI(TAG, "iterations before char %c %d\n", **str, iterations);
-         iterations = (iterations * 10) + (**str - '0');
-         (*str)++;
-      }
+   int8_t auxIndex = 0;
+   uint8_t counter = 0;
+   char *auxStr = malloc(strlen(str) + 1);
 
-      if (iterations == 0) {
-         iterations = 1;
-      }
+   memccpy(auxStr, str, 0, strlen(str) + 1);
+   // ESP_LOGE(TAG, "Copied %s to %s", str, auxStr);
 
-      while ((*(*str + auxIndex)) != ']' && *(*str + auxIndex) != '\0') {
-         if (*(*str + auxIndex) == '[') {
-            auxIndex = getLoopEndingChar(*str + auxIndex);
-         } else
-            auxIndex++;
-      }
+   auxIndex = getLoopEndingChar(auxStr);
+   // ESP_LOGI(TAG, "auxIndex = %d", auxIndex);
 
-      ESP_LOGI(TAG, "iterations: %d, char %c, auxIndex: %d\n", iterations, **str, auxIndex);
-      for (int i = 0; i < iterations; i++) {
-         for (int j = 0; j < auxIndex; j++) {
-            if (*(*str + j) == '[') {
-               print_recursion_string(*str + j + 1);
-            } else {
-               putchar(*(*str + j));
-            }
+   if (auxIndex < 0) {
+      ESP_LOGE(TAG,
+               "Hubo un error, el numero de \'[\' y \']\' no son iguales\n");
+   }
+
+   while (*auxStr >= '0' && *auxStr <= '9' && counter < auxIndex) {
+      // ESP_LOGI(TAG, "iterations before char %c %d\n", *auxStr, iterations);
+      iterations = (iterations * 10) + (*auxStr - '0');
+      auxStr++;
+      counter++;
+   }
+
+   if (iterations == 0) {
+      ESP_LOGW(TAG, "No number of iterations found, assuming once");
+      iterations = 1;
+   }
+
+   // ESP_LOGI(TAG, "iterating from: %c, until %c, with %d", *auxStr,
+   //          *(auxStr + auxIndex - 1), auxIndex);
+   for (int i = 0; i < iterations; i++) {
+      for (int j = 0; j < auxIndex; j++) {
+         // ESP_LOGI(TAG, "Current char \'%c\', \'%x\'", *(auxStr + j),
+         //          *(auxStr + j));
+         // ESP_LOGE(TAG, "\t\t\tCurrent i, j: %d, %d", i, j);
+         if (*(auxStr + j) == '[') {
+            j++;
+            // ESP_LOGI(TAG, "iterations: %d, char %c, auxIndex: %d\n",
+            // iterations,
+            //          *(str + j), auxIndex);
+            // ESP_LOGI(TAG, "char: %x, char %c, auxIndex: %d\n", *(str + j),
+            //          *(str + j), auxIndex);
+            j += print_recursion_string(auxStr + j);
+         } else if (*(auxStr + j) == ']')
+            ;
+         else {
+            putchar(*(auxStr + j));
          }
       }
-      ESP_LOGI(TAG, "char: %c, char %x, auxIndex: %d\n", **str, **str, auxIndex);
-      *str += auxIndex + 1;  // +1 to skip the ']'
-      ESP_LOGI(TAG, "skipped to char: %c, char %x\n", **str, **str);
+      // ESP_LOGI(TAG, "%d iteration done from: %c, until %c", i + 1, *auxStr,
+      //          *(auxStr + auxIndex - 1));
    }
+   return auxIndex;
 }
 
 void print_expanded_string(char *str) {
    while (*str) {
       if (*str == '[') {
          str++;
-         print_recursion_string(&str);
-         // ESP_LOGI(TAG, "skipped to char: %c, char %x\n", *str, *str);
-      } else {
+         int auxIndex = print_recursion_string(str);
+         if (auxIndex <= 0) return;
+         str += auxIndex;
+         // ESP_LOGI(TAG, "skipped %d chars, upto char: %c, char %x\n",
+         // auxIndex, *str, *str);
+      } else if (*str == ']')
+         str++;
+      else {
          // ESP_LOGI(TAG, "char: %c, char %x\n", *str, *str);
          putchar(*str++);
       }
@@ -124,7 +151,9 @@ void app_main(void) {
    vTaskDelay(pdMS_TO_TICKS(1000));
 
    esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-       .format_if_mount_failed = true, .max_files = 5, .allocation_unit_size = 16 * 1024};
+       .format_if_mount_failed = true,
+       .max_files = 5,
+       .allocation_unit_size = 16 * 1024};
 
    sdmmc_card_t *card;
    sdmmc_host_t host = SDSPI_HOST_DEFAULT();
@@ -150,7 +179,8 @@ void app_main(void) {
    slot_config.host_id = host.slot;
 
    ESP_LOGI(TAG, "Montando el filesystem");
-   ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &card);
+   ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config,
+                                 &mount_config, &card);
    if (ret != ESP_OK) {
       ESP_LOGE(TAG, "Fallo montar el filesystem (%s)", esp_err_to_name(ret));
       spi_bus_free(host.slot);
@@ -164,14 +194,14 @@ void app_main(void) {
    const char *file_hello2 = MOUNT_POINT "/ejemplo2.txt";
    const char *file_hello3 = MOUNT_POINT "/ejemplo3.txt";
 
-   // ret = s_example_read_file(file_hello);
-   // if (ret != ESP_OK) return;
+   ret = s_example_read_file(file_hello);
+   if (ret != ESP_OK) return;
 
    ret = s_example_read_file(file_hello2);
    if (ret != ESP_OK) return;
 
-   // ret = s_example_read_file(file_hello3);
-   // if (ret != ESP_OK) return;
+   ret = s_example_read_file(file_hello3);
+   if (ret != ESP_OK) return;
 
    esp_vfs_fat_sdcard_unmount(MOUNT_POINT, card);
    ESP_LOGI(TAG, "Tarjeta desmontada");
