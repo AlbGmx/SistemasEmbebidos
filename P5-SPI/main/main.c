@@ -1,11 +1,11 @@
-#include <ctype.h>
-#include <dirent.h>  // Include for directory functions
+#include <dirent.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/unistd.h>
 
 #include "driver/gpio.h"
 #include "esp_vfs_fat.h"
+#include "myUart.h"
 #include "sdmmc_cmd.h"
 
 #define EXAMPLE_MAX_CHAR_SIZE 64
@@ -23,8 +23,8 @@
 static const char *TAG = "sd_card";
 
 void list_files_in_directory(const char *path) {
-   struct dirent *de;       
-   DIR *dr = opendir(path); 
+   struct dirent *de;
+   DIR *dr = opendir(path);
 
    if (dr == NULL) {
       ESP_LOGE(TAG, "Could not open directory: %s", path);
@@ -37,11 +37,7 @@ void list_files_in_directory(const char *path) {
       ESP_LOGI(TAG, "\t\tFilename --> %s", de->d_name);
    }
    ESP_LOGI(TAG, "\t=============================================\n\n");
-   closedir(dr);  
-}
-
-void get_file_name(const char *path, const char *fileName) {
-   
+   closedir(dr);
 }
 
 static esp_err_t s_example_write_file(const char *path, char *data) {
@@ -172,7 +168,7 @@ static esp_err_t s_example_read_file(const char *path) {
    // Strip newline
    char *pos = strchr(line, '\n');
    if (pos) *pos = '\0';
-   ESP_LOGI(TAG, "RAW values: '%s'", line);
+   ESP_LOGI(TAG, "RAW values: '%s'\n", line);
    print_expanded_string(line);
    printf("\n");
    return ESP_OK;
@@ -180,6 +176,7 @@ static esp_err_t s_example_read_file(const char *path) {
 
 void app_main(void) {
    esp_err_t ret;
+   init_UARTs();
 
    // Give some time for the SD card to stabilize
    vTaskDelay(pdMS_TO_TICKS(1000));
@@ -223,27 +220,39 @@ void app_main(void) {
 
    ESP_LOGI(TAG, "Filesystem montado");
    sdmmc_card_print_info(stdout, card);
+   while (true) {
+      // Print FileSystem
+      list_files_in_directory(MOUNT_POINT);
 
-   // Print FileSystem
-   list_files_in_directory(MOUNT_POINT);
+      char *filename_path = (char *)malloc(EXAMPLE_MAX_CHAR_SIZE);
+      char *data;
 
-   const char *fileName = MOUNT_POINT "/";
+      put_str(UART_CONSOLE, "write or read? (w/r): ");
+      char action = get_char(UART_CONSOLE);
+      char *aux = (char *)malloc(EXAMPLE_MAX_CHAR_SIZE);
+      snprintf(aux, EXAMPLE_MAX_CHAR_SIZE, "\nEnter filename to %s from: ", action == 'r' ? "read" : "write");
+      put_str(UART_CONSOLE, aux);
+      data = get_line(UART_CONSOLE);
+      if (filename_path == NULL || data == NULL) {
+         ESP_LOGE(TAG, "Memory allocation failed!");
+         return;
+      }
+      snprintf(filename_path, EXAMPLE_MAX_CHAR_SIZE, "%s/%s", MOUNT_POINT, data);
+      if (action == 'r') {
+         ret = s_example_read_file(filename_path);
+      } else if (action == 'w') {
+         put_str(UART_CONSOLE, "\nEnter data to write: ");
+         data = get_line(UART_CONSOLE);
+         ret = s_example_write_file(filename_path, data);
 
-   get_file_name(MOUNT_POINT, fileName);
-
-   const char *file_hello4 = MOUNT_POINT "/ejemplo4.txt";
-
-   char data[EXAMPLE_MAX_CHAR_SIZE];
-   snprintf(data, EXAMPLE_MAX_CHAR_SIZE, "%s", "[2ABC[3]D[2EF][H]IJ[]KL]");
-   ret = s_example_write_file(file_hello4, data);
-   if (ret != ESP_OK) {
-      return;
+      } else {
+         ESP_LOGE(TAG, "Invalid action");
+      }
+      ESP_LOGI(TAG, "Want to make another action? (y/n): ");
+      if (get_char(UART_CONSOLE) != 'y') break;
    }
 
-   ret = s_example_read_file(file_hello4);
-   if (ret != ESP_OK) return;
-
    esp_vfs_fat_sdcard_unmount(MOUNT_POINT, card);
-   ESP_LOGI(TAG, "Tarjeta desmontada");
+   ESP_LOGW(TAG, "Tarjeta desmontada");
    spi_bus_free(host.slot);
 }
