@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <dirent.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -53,82 +54,56 @@ static esp_err_t s_example_write_file(const char *path, char *data) {
    return ESP_OK;
 }
 
-int getLoopEndingChar(char *str) {
-   int8_t auxIndex = 0;
-   int8_t openBrackets = 1;
-   while (openBrackets > 0) {
-      // ESP_LOGI(TAG, "FOUND %c, %x", *(str + auxIndex), *(str + auxIndex));
-      if (*(str + auxIndex) == START_LOOP_CHAR) {
-         // ESP_LOGW(TAG, "FOUND [");
+int getLoopEndingChar(const char *str) {
+   int auxIndex = 0;
+   int openBrackets = 1;
+
+   while (str[auxIndex] && openBrackets > 0) {
+      char currentChar = str[auxIndex++];
+
+      if (currentChar == START_LOOP_CHAR) {
          openBrackets++;
-      } else if (*(str + auxIndex) == END_LOOP_CHAR) {
-         // ESP_LOGW(TAG, "FOUND ]");
+      } else if (currentChar == END_LOOP_CHAR) {
          openBrackets--;
-      } else if (*(str + auxIndex) == 0) {
-         // ESP_LOGE(TAG, "FOUND %c, %x, loops: %d", *(str + auxIndex), *(str + auxIndex), openBrackets);
-         return -1;
       }
-      auxIndex++;
    }
-   // ESP_LOGI(TAG, "Returning %c, %x",  auxIndex,  auxIndex);
-   return auxIndex;
+
+   return openBrackets == 0 ? auxIndex : -1;
 }
 
 int8_t print_recursion_string(char *str) {
-   uint8_t iterations = 0;
-   int8_t auxIndex = 0;
-   uint8_t counter = 0;
-
-   auxIndex = getLoopEndingChar(str);
-   // ESP_LOGI(TAG, "\nauxIndex = %d\n", auxIndex);
-
+   int8_t auxIndex = getLoopEndingChar(str);
    if (auxIndex < 0) {
-      ESP_LOGE(TAG, "Hubo un error, el numero de \'[\' y \']\' no son iguales\n");
+      ESP_LOGE(TAG, "Mismatched brackets.\n");
       return -1;
    }
 
-   while (*(str + counter) >= '0' && *(str + counter) <= '9' && counter < auxIndex) {
-      // ESP_LOGI(TAG, "iterations before char %c %d\n", *auxStr, iterations);
-      iterations = (iterations * 10) + (*(str + counter) - '0');
+   int counter = 0;
+   int iterations = 0;
+
+   while (isdigit((unsigned char)str[counter]) && counter < auxIndex) {
+      iterations = iterations * 10 + (str[counter] - '0');
       counter++;
    }
 
-   if (*(str + counter) == ']') {
-      // ESP_LOGW(TAG, "NO VALUES TO LOOP, RETURNING");
-      return auxIndex;
-   }
+   if (iterations == 0) iterations = 1;
 
-   if (iterations == 0) {
-      // ESP_LOGW(TAG, "\nNo number of iterations found, assuming once\n");
-      iterations = 1;
-   }
-   // else ESP_LOGI(TAG, "\nIterations = %d\n", iterations);
-   // ESP_LOGI(TAG, "iterating from: %c, until %c, with %d", *str, *(str + counter + auxIndex - 1), auxIndex);
-   for (int i = 0; i < iterations; i++) {
-      for (int j = 0; j < auxIndex - END_LOOP_CHAR_TO_IGNORE; j++) {
-         // ESP_LOGI(TAG, "Current char \'%c\', \'%x\'", *(str + counter + j), *(str + counter + j));
-         // ESP_LOGE(TAG, "\t\t\tCurrent i, j: %d, %d", i, j);
-         if (*(str + counter + j) == START_LOOP_CHAR) {
+   char *content_start = &str[counter];
+   int content_length = auxIndex - counter - END_LOOP_CHAR_TO_IGNORE;
+
+   for (int i = 0; i < iterations; ++i) {
+      int j = 0;
+      while (j < content_length) {
+         if (content_start[j] == START_LOOP_CHAR) {
             j++;
-            // ESP_LOGI(TAG, "iterations: %d, char %c, auxIndex: %d\n", iterations, *(str + j), auxIndex);
-            // ESP_LOGI(TAG, "char: %x, char %c, auxIndex: %d\n", *(str + j), *(str + j), auxIndex);
-
-            // -1 to remove cancel out the j++ of the loop
-            int8_t increaseIndex = print_recursion_string(str + counter + j) - 1;
-
-            if (increaseIndex < 0) {
-               return -1;
-            }
-
-            j += increaseIndex;
-
-         } else if (*(str + counter + j) == END_LOOP_CHAR)
-            ;
-         else {
-            putchar(*(str + counter + j));
+            int8_t nestedIndex = print_recursion_string(&content_start[j]);
+            if (nestedIndex < 0) return -1;
+            j += nestedIndex;
+         } else {
+            putchar(content_start[j]);
+            j++;
          }
       }
-      // ESP_LOGI(TAG, "%d iteration done from: %c, until %c", i + 1, *auxStr, *(auxStr + auxIndex - 1));
    }
    return auxIndex;
 }
@@ -136,18 +111,13 @@ int8_t print_recursion_string(char *str) {
 void print_expanded_string(char *str) {
    while (*str) {
       if (*str == START_LOOP_CHAR) {
-         str++;
-         int auxIndex = print_recursion_string(str);
-         if (auxIndex <= 0) {
-            ESP_LOGI(TAG, "There was an error parsing the loop\n");
+         int auxIndex = print_recursion_string(str + 1);
+         if (auxIndex < 0) {
+            ESP_LOGE(TAG, "Parsing error.\n");
             return;
          }
-         str += auxIndex;
-         // ESP_LOGI(TAG, "skipped %d chars, upto char: %c, char %x\n", auxIndex, *str, *str);
-      } else if (*str == END_LOOP_CHAR)
-         str++;
-      else {
-         // ESP_LOGI(TAG, "char: %c, char %x\n", *str, *str);
+         str += auxIndex + 1;
+      } else {
          putchar(*str++);
       }
    }
@@ -175,7 +145,6 @@ static esp_err_t s_example_read_file(const char *path) {
 }
 
 void app_main(void) {
-   esp_err_t ret;
    init_UARTs();
 
    // Give some time for the SD card to stabilize
@@ -200,59 +169,71 @@ void app_main(void) {
        .max_transfer_sz = 4000,
    };
 
-   ret = spi_bus_initialize(host.slot, &bus_cfg, SDSPI_DEFAULT_DMA);
-   if (ret != ESP_OK) {
-      ESP_LOGE(TAG, "Fallo inicializacion del bus.");
-      return;
-   }
+   ESP_ERROR_CHECK(spi_bus_initialize(host.slot, &bus_cfg, SDSPI_DEFAULT_DMA));
 
    sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
    slot_config.gpio_cs = PIN_NUM_CS;
    slot_config.host_id = host.slot;
 
-   ESP_LOGI(TAG, "Montando el filesystem");
-   ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &card);
-   if (ret != ESP_OK) {
-      ESP_LOGE(TAG, "Fallo montar el filesystem (%s)", esp_err_to_name(ret));
-      spi_bus_free(host.slot);
-      return;
-   }
+   ESP_ERROR_CHECK(esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &card));
 
    ESP_LOGI(TAG, "Filesystem montado");
    sdmmc_card_print_info(stdout, card);
-   while (true) {
-      // Print FileSystem
-      list_files_in_directory(MOUNT_POINT);
+   char *aux = (char *)malloc(EXAMPLE_MAX_CHAR_SIZE);
+   char *filename_path = (char *)malloc(EXAMPLE_MAX_CHAR_SIZE);
+   if (!aux || !filename_path) {
+      ESP_LOGE(TAG, "Memory allocation failed!");
+   } else {
+      while (true) {
+         list_files_in_directory(MOUNT_POINT);
 
-      char *filename_path = (char *)malloc(EXAMPLE_MAX_CHAR_SIZE);
-      char *data;
+         put_str(UART_CONSOLE, "write or read? (w/r): ");
+         char action = get_char(UART_CONSOLE);
 
-      put_str(UART_CONSOLE, "write or read? (w/r): ");
-      char action = get_char(UART_CONSOLE);
-      char *aux = (char *)malloc(EXAMPLE_MAX_CHAR_SIZE);
-      snprintf(aux, EXAMPLE_MAX_CHAR_SIZE, "\nEnter filename to %s from: ", action == 'r' ? "read" : "write");
-      put_str(UART_CONSOLE, aux);
-      data = get_line(UART_CONSOLE);
-      if (filename_path == NULL || data == NULL) {
-         ESP_LOGE(TAG, "Memory allocation failed!");
-         return;
+         if (action != 'r' && action != 'w') {
+            ESP_LOGE(TAG, "Invalid action");
+            continue;
+         }
+
+         snprintf(aux, EXAMPLE_MAX_CHAR_SIZE, "\nEnter filename to %s from: ", (action == 'r') ? "read" : "write");
+         put_str(UART_CONSOLE, aux);
+
+         char *data = get_line(UART_CONSOLE);
+         if (data == NULL) {
+            ESP_LOGE(TAG, "Error getting filename!");
+            continue;
+         }
+
+         snprintf(filename_path, EXAMPLE_MAX_CHAR_SIZE, "%s/%s", MOUNT_POINT, data);
+         esp_err_t ret;
+
+         if (action == 'r') {
+            ret = s_example_read_file(filename_path);
+            if (ret == ESP_FAIL) {
+               ESP_LOGE(TAG, "Error reading file");
+            }
+         } else {
+            put_str(UART_CONSOLE, "\nEnter data to write: ");
+            data = get_line(UART_CONSOLE);
+            if (data == NULL) {
+               ESP_LOGE(TAG, "Error getting data to write!");
+               continue;
+            }
+            ESP_ERROR_CHECK(s_example_write_file(filename_path, data));
+         }
+
+         ESP_LOGI(TAG, "Want to make another action? (y/n): ");
+         if (get_char(UART_CONSOLE) != 'y') {
+            break;
+         }
       }
-      snprintf(filename_path, EXAMPLE_MAX_CHAR_SIZE, "%s/%s", MOUNT_POINT, data);
-      if (action == 'r') {
-         ret = s_example_read_file(filename_path);
-      } else if (action == 'w') {
-         put_str(UART_CONSOLE, "\nEnter data to write: ");
-         data = get_line(UART_CONSOLE);
-         ret = s_example_write_file(filename_path, data);
 
-      } else {
-         ESP_LOGE(TAG, "Invalid action");
-      }
-      ESP_LOGI(TAG, "Want to make another action? (y/n): ");
-      if (get_char(UART_CONSOLE) != 'y') break;
+      // Free allocated memory
+      free(filename_path);
+      free(aux);
+
+      esp_vfs_fat_sdcard_unmount(MOUNT_POINT, card);
+      ESP_LOGW(TAG, "Tarjeta desmontada");
+      spi_bus_free(host.slot);
    }
-
-   esp_vfs_fat_sdcard_unmount(MOUNT_POINT, card);
-   ESP_LOGW(TAG, "Tarjeta desmontada");
-   spi_bus_free(host.slot);
 }
