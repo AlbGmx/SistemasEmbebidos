@@ -113,7 +113,7 @@ void print_expanded_string(char *str) {
       if (*str == START_LOOP_CHAR) {
          int auxIndex = print_recursion_string(str + 1);
          if (auxIndex < 0) {
-            ESP_LOGE(TAG, "Parsing error.\n");
+            ESP_LOGE(TAG, "Error\n");
             return;
          }
          str += auxIndex + 1;
@@ -187,20 +187,20 @@ void app_main(void) {
       while (true) {
          list_files_in_directory(MOUNT_POINT);
 
-         put_str(UART_CONSOLE, "write or read? (w/r): ");
+         put_str(UART_CONSOLE, "Leer o escribir archivo? (r/w): ");
          char action = get_char(UART_CONSOLE);
 
          if (action != 'r' && action != 'w') {
-            ESP_LOGE(TAG, "Invalid action");
+            ESP_LOGE(TAG, "Accion invalida");
             continue;
          }
 
-         snprintf(aux, EXAMPLE_MAX_CHAR_SIZE, "\nEnter filename to %s from: ", (action == 'r') ? "read" : "write");
+         snprintf(aux, EXAMPLE_MAX_CHAR_SIZE, "\nIntroduce el nombre de archivo a %s: ", (action == 'r') ? "leer" : "ecribir");
          put_str(UART_CONSOLE, aux);
 
          char *data = get_line(UART_CONSOLE);
          if (data == NULL) {
-            ESP_LOGE(TAG, "Error getting filename!");
+            ESP_LOGE(TAG, "Error leyendo nombre de archivo!");
             continue;
          }
 
@@ -210,19 +210,19 @@ void app_main(void) {
          if (action == 'r') {
             ret = s_example_read_file(filename_path);
             if (ret == ESP_FAIL) {
-               ESP_LOGE(TAG, "Error reading file");
+               ESP_LOGE(TAG, "Error leyendo archivo!");
             }
          } else {
-            put_str(UART_CONSOLE, "\nEnter data to write: ");
+            put_str(UART_CONSOLE, "\nIntroduce datos a escribir: ");
             data = get_line(UART_CONSOLE);
             if (data == NULL) {
-               ESP_LOGE(TAG, "Error getting data to write!");
+               ESP_LOGE(TAG, "Error obteniendo data a escribir!");
                continue;
             }
             ESP_ERROR_CHECK(s_example_write_file(filename_path, data));
          }
 
-         ESP_LOGI(TAG, "Want to make another action? (y/n): ");
+         ESP_LOGI(TAG, "Hacer alguna otra accion? (y/n): ");
          if (get_char(UART_CONSOLE) != 'y') {
             break;
          }
