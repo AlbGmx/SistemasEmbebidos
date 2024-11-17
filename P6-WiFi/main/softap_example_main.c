@@ -1,6 +1,6 @@
+#include "battleship.h"
 #include "myServer.h"
 #include "myWifi.h"
-
 static const char *TAG = "HTTP Server";
 
 void app_main(void) {
@@ -16,6 +16,7 @@ void app_main(void) {
    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server));
 
    server = start_webserver();
+   battleship();
    while (server) {
       sleep(5);
    }

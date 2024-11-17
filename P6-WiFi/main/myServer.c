@@ -11,7 +11,6 @@ esp_err_t hello_get_handler(httpd_req_t* req) {
    buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
    if (buf_len > 1) {
       buf = malloc(buf_len);
-      ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
       /* Copy null terminated value string into buffer */
       if (httpd_req_get_hdr_value_str(req, "Host", buf, buf_len) == ESP_OK) {
          ESP_LOGI(TAG, "Found header => Host: %s", buf);
@@ -22,7 +21,6 @@ esp_err_t hello_get_handler(httpd_req_t* req) {
    buf_len = httpd_req_get_hdr_value_len(req, "Test-Header-2") + 1;
    if (buf_len > 1) {
       buf = malloc(buf_len);
-      ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
       if (httpd_req_get_hdr_value_str(req, "Test-Header-2", buf, buf_len) == ESP_OK) {
          ESP_LOGI(TAG, "Found header => Test-Header-2: %s", buf);
       }
@@ -32,7 +30,6 @@ esp_err_t hello_get_handler(httpd_req_t* req) {
    buf_len = httpd_req_get_hdr_value_len(req, "Test-Header-1") + 1;
    if (buf_len > 1) {
       buf = malloc(buf_len);
-      ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
       if (httpd_req_get_hdr_value_str(req, "Test-Header-1", buf, buf_len) == ESP_OK) {
          ESP_LOGI(TAG, "Found header => Test-Header-1: %s", buf);
       }
@@ -44,7 +41,6 @@ esp_err_t hello_get_handler(httpd_req_t* req) {
    buf_len = httpd_req_get_url_query_len(req) + 1;
    if (buf_len > 1) {
       buf = malloc(buf_len);
-      ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
       if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
          ESP_LOGI(TAG, "Found URL query => %s", buf);
          char param[EXAMPLE_HTTP_QUERY_KEY_MAX_LEN], dec_param[EXAMPLE_HTTP_QUERY_KEY_MAX_LEN] = {0};
@@ -123,19 +119,29 @@ esp_err_t echo_post_handler(httpd_req_t* req) {
 
 const httpd_uri_t echo = {.uri = "/echo", .method = HTTP_POST, .handler = echo_post_handler, .user_ctx = NULL};
 
+static const httpd_uri_t indice = {
+    .uri = "/indice",
+    .method = HTTP_GET,
+    .handler = index_get_handler,
+};
+
 esp_err_t index_get_handler(httpd_req_t* req) {
+   ESP_LOGI(TAG, "Request received for URI: %s", req->uri);
    char* buf;
    size_t buf_len;
    extern unsigned char index_html_start[] asm("_binary_index_html_start");
    extern unsigned char index_html_end[] asm("_binary_index_html_end");
    size_t index_html_size = index_html_end - index_html_start;
-   char* index_html[index_html_size];
+   char* index_html = malloc(index_html_size);
+   if (!index_html) {
+      ESP_LOGE(TAG, "Failed to allocate memory for index_html");
+      return ESP_ERR_NO_MEM;
+   }
    memcpy(index_html, index_html_start, index_html_size);
 
    buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
    if (buf_len > 1) {
       buf = malloc(buf_len);
-      ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
       if (httpd_req_get_hdr_value_str(req, "Host", buf, buf_len) == ESP_OK) {
          ESP_LOGI(TAG, "Found header => Host: %s", buf);
       }
@@ -145,7 +151,7 @@ esp_err_t index_get_handler(httpd_req_t* req) {
    buf_len = httpd_req_get_url_query_len(req) + 1;
    if (buf_len > 1) {
       buf = malloc(buf_len);
-      ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
+
       if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
          ESP_LOGI(TAG, "Found URL query => %s", buf);
          char param[EXAMPLE_HTTP_QUERY_KEY_MAX_LEN], dec_param[EXAMPLE_HTTP_QUERY_KEY_MAX_LEN] = {0};
@@ -164,18 +170,13 @@ esp_err_t index_get_handler(httpd_req_t* req) {
    }
 
    httpd_resp_set_type(req, "text/html");
-   httpd_resp_send(req, index_html, index_html_size);
+   httpd_resp_send(req, (const char*)index_html, index_html_size);
    if (httpd_req_get_hdr_value_len(req, "Host") == 0) {
-      ESP_LOGI(TAG_WEBS, "Request headers lost");
+      ESP_LOGI(TAG, "Request headers lost");
    }
+   free(index_html);
    return ESP_OK;
 }
-
-static const httpd_uri_t index = {
-    .uri = "/index",
-    .method = HTTP_GET,
-    .handler = index_get_handler,
-};
 
 esp_err_t any_handler(httpd_req_t* req) {
    const char* resp_str = (const char*)req->user_ctx;
@@ -216,13 +217,13 @@ esp_err_t ctrl_put_handler(httpd_req_t* req) {
       ESP_LOGI(TAG, "Unregistering /hello and /echo URIs");
       httpd_unregister_uri(req->handle, "/hello");
       httpd_unregister_uri(req->handle, "/echo");
-      httpd_unregister_uri(req->handle, "/index");
+      httpd_unregister_uri(req->handle, "/indice");
       httpd_register_err_handler(req->handle, HTTPD_404_NOT_FOUND, http_404_error_handler);
    } else {
       ESP_LOGI(TAG, "Registering /hello and /echo URIs");
       httpd_register_uri_handler(req->handle, &hello);
       httpd_register_uri_handler(req->handle, &echo);
-      httpd_register_uri_handler(req->handle, &index);
+      httpd_register_uri_handler(req->handle, &indice);
       httpd_register_err_handler(req->handle, HTTPD_404_NOT_FOUND, NULL);
    }
 
@@ -244,7 +245,7 @@ httpd_handle_t start_webserver(void) {
       httpd_register_uri_handler(server, &echo);
       httpd_register_uri_handler(server, &ctrl);
       httpd_register_uri_handler(server, &any);
-      httpd_register_uri_handler(server, &index);
+      httpd_register_uri_handler(server, &indice);
       return server;
    }
 
@@ -269,7 +270,7 @@ void disconnect_handler(void* arg, esp_event_base_t event_base, int32_t event_id
 void connect_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
    httpd_handle_t* server = (httpd_handle_t*)arg;
    if (*server == NULL) {
-      ESP_LOGI(TAG, "Starting webserver");
+      ESP_LOGI(TAG, "Starting webserver ?");
       *server = start_webserver();
    }
 }
