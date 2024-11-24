@@ -1,5 +1,9 @@
 #include "my_tcp.h"
 
+int sock = 0;
+EventGroupHandle_t tcp_event_group = NULL;
+static const char *TAG_TCP = "TCP";
+
 void tcp_send(int sock, const void *data, size_t data_size) {
    xEventGroupWaitBits(tcp_event_group, TCP_CONNECTED_BIT || SENSOR_DATA_READ_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
    xEventGroupClearBits(tcp_event_group, SENSOR_DATA_READ_BIT);
@@ -22,7 +26,7 @@ void tcp_receive_task(void *pvParameters) {
 
       xEventGroupWaitBits(tcp_event_group, TCP_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
 
-      struct sensor_packet received_packet;
+      sensors_packet_t received_packet;
 
       struct timeval timeout;
       timeout.tv_sec = portMAX_DELAY;
@@ -38,13 +42,14 @@ void tcp_receive_task(void *pvParameters) {
          ESP_LOGW(TAG_TCP, "Connection closed by peer");
          break;
       }
-      ESP_LOGI(TAG_FUNCTIONS, "Received sensor data: who_am_i=0x%x, temp=%.1f, press=%.1f, humid=%.2f",
-               received_packet.who_am_i, received_packet.temperature, received_packet.pressure,
-               received_packet.humidity);
-      bme280_data_struct.sensor_data.temperature = received_packet.temperature;
-      bme280_data_struct.sensor_data.pressure = received_packet.pressure;
-      bme280_data_struct.sensor_data.humidity = received_packet.humidity;
-      
+      ESP_LOGI(TAG_TCP, "Received %d bytes sensor data: who_am_i=0x%x, temp=%.1f, press=%.1f, humid=%.2f, gyro=%.2f",
+               bytes, received_packet.who_am_i, received_packet.temperature, received_packet.pressure,
+               received_packet.humidity, received_packet.gyro);
+      sensors_data_struct.who_am_i = received_packet.who_am_i;
+      sensors_data_struct.sensor_data.temperature = received_packet.temperature;
+      sensors_data_struct.sensor_data.pressure = received_packet.pressure;
+      sensors_data_struct.sensor_data.humidity = received_packet.humidity;
+      sensors_data_struct.gyro = received_packet.gyro;
       delaySeconds(1);
    }
 }

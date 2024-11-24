@@ -2,6 +2,260 @@
 
 #include "my_tcp.h"
 
+EventGroupHandle_t wifi_event_group = NULL;
+static const char *TAG_FUNCTIONS = "Custom Functions";
+static const char *TAG_NVS = "NVS";
+static const char *TAG_WIFI_AP = "WiFI AP";
+static const char *TAG_SERVER = "Server";
+httpd_handle_t server;
+char deviceNumber[MAX_CHAR] = {0};
+char ssid[MAX_CHAR] = {0};
+char pass[MAX_CHAR] = {0};
+
+const httpd_uri_t infoSite = {
+    .uri = "/info",
+    .method = HTTP_GET,
+    .handler = info_get_handler,
+};
+
+void gpio_init() {
+   gpio_config_t io_conf;
+   io_conf.intr_type = GPIO_INTR_DISABLE;
+   io_conf.mode = GPIO_MODE_INPUT_OUTPUT;
+   io_conf.pin_bit_mask = (1ULL << LED);
+   io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+   io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+   gpio_config(&io_conf);
+
+   io_conf.intr_type = GPIO_INTR_DISABLE;
+   io_conf.mode = GPIO_MODE_INPUT;
+   io_conf.pin_bit_mask = (1ULL << ADC_SELECTED);
+   io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+   io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+   gpio_config(&io_conf);
+
+   io_conf.intr_type = GPIO_INTR_NEGEDGE;
+   io_conf.mode = GPIO_MODE_INPUT;
+   io_conf.pin_bit_mask = (1 << BUTTON_SEND_MESSAGE | 1 << RESTART_PIN);
+   io_conf.pull_down_en = 0;
+   io_conf.pull_up_en = 1;
+   gpio_config(&io_conf);
+}
+
+int read_led() {
+   int led_state = gpio_get_level(LED);
+   ESP_LOGI(TAG_FUNCTIONS, "LED state is: %d", led_state);
+   return led_state;
+}
+
+float read_temperature() { return sensors_data_struct.sensor_data.temperature; }
+
+float read_humidity() { return sensors_data_struct.sensor_data.humidity; }
+
+float read_pressure() { return sensors_data_struct.sensor_data.pressure; }
+
+float read_gyroscope() { return sensors_data_struct.gyro; }
+
+esp_err_t set_nvs_creds_and_name(const char *ssid, const char *pass, char *deviceNumber) {
+   nvs_handle_t nvs_handle;
+   ESP_LOGI(TAG_NVS, "Setting %s, %s, %s", ssid, pass, deviceNumber);
+   esp_err_t err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
+   if (err != ESP_OK) {
+      ESP_LOGE(TAG_NVS, "Error (%s) opening NVS handle", esp_err_to_name(err));
+      return err;
+   }
+   if (nvs_set_str(nvs_handle, "deviceNumber", deviceNumber) != ESP_OK) {
+      ESP_LOGE(TAG_NVS, "Error setting device name");
+      return ESP_ERR_NVS_NOT_FOUND;
+   }
+   if (nvs_set_str(nvs_handle, "ssid", ssid) != ESP_OK) {
+      ESP_LOGE(TAG_NVS, "Error setting SSID");
+      return ESP_ERR_NVS_NOT_FOUND;
+   }
+   if (nvs_set_str(nvs_handle, "pass", pass) != ESP_OK) {
+      ESP_LOGE(TAG_NVS, "Error setting password");
+      return ESP_ERR_NVS_NOT_FOUND;
+   }
+   nvs_close(nvs_handle);
+   return ESP_OK;
+}
+
+void url_decode(char *str) {
+   char *source = str;
+   char *destination = str;
+   while (*source) {
+      if (*source == '%') {
+         if (isxdigit((unsigned char)source[1]) && isxdigit((unsigned char)source[2])) {
+            char hex[3] = {source[1], source[2], '\0'};
+            *destination = (char)strtol(hex, NULL, 16);
+            source += 3;
+         } else {
+            *destination = *source++;
+         }
+      } else if (*source == '+') {
+         *destination = ' ';
+         source++;
+      } else {
+         *destination = *source++;
+      }
+      destination++;
+   }
+   *destination = '\0';
+}
+
+esp_err_t info_get_handler(httpd_req_t *req) {
+   bool trigger_alert = false;
+   char *auxStr =
+       "<div class=\"data\">\n"
+       "<p><span>Gyroscope:</span> %.2f°/s</p>\n"
+       "<p><span>Temperature:</span> %2.1f°C</p>\n"
+       "<p><span>Pressure:</span> %2.2fkPa</p>\n"
+       "<p><span>Humidity:</span> %2.1f%%</p>\n"
+       "</div>\n"
+       "</div>\n";
+   extern unsigned char info_start[] asm("_binary_info_top_html_start");
+   extern unsigned char info_end[] asm("_binary_info_top_html_end");
+   size_t info_len = info_end - info_start;
+   char *infoHtml = malloc(BUFFER_MAX);
+   if (infoHtml == NULL) {
+      ESP_LOGE(TAG_SERVER, "Failed to allocate memory");
+      return ESP_FAIL;
+   }
+
+   httpd_resp_set_type(req, "text/html");
+   httpd_resp_send_chunk(req, (const char *)info_start, info_len);
+
+   float temperature = read_temperature();
+   float pressure = read_pressure();
+   float humidity = read_humidity();
+   float gyro = read_gyroscope();
+
+   trigger_alert = temperature > 30.0;
+   snprintf(infoHtml, info_len, "<div class=\"segment\" id=\"segment1\">\n<h2>Inside Package</h2>\n");
+   httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
+   snprintf(infoHtml, info_len, auxStr, gyro, temperature, pressure, humidity);
+   httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
+   snprintf(infoHtml, info_len, "<div class=\"segment\" id=\"segment2\">\n<h2>Ouside Package</h2>\n");
+   httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
+   snprintf(infoHtml, info_len, auxStr, gyro, temperature, pressure, humidity);
+   httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
+   if (trigger_alert) {
+      snprintf(infoHtml, info_len,
+               "<div class=\"alert\" id=\"alert\">\n<h2>Temperature Alert!</h2>\n"
+               "<div class=\"data\">\n"
+               "<p><span>🚨 Temperature Alert ! 🚨</span></p>"
+               "</div>\n"
+               "</div>\n");
+      httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
+   }
+   httpd_resp_send_chunk(req,
+                         "<footer>\n"
+                         "<p>&copy; 2024 Sensor Dashboard | Sistemas Embebidos </p>\n"
+                         "</footer>\n"
+                         "</html>\n",
+                         HTTPD_RESP_USE_STRLEN);
+   httpd_resp_send_chunk(req, NULL, 0);
+   if (httpd_req_get_hdr_value_len(req, "Host") == 0) {
+      ESP_LOGI(TAG_SERVER, "Request headers lost");
+   }
+   free(infoHtml);
+
+   return ESP_OK;
+}
+
+httpd_handle_t start_webserver(void) {
+   httpd_handle_t server = NULL;
+   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+   config.stack_size = 4096 * 8;
+
+   ESP_LOGI(TAG_SERVER, "Iniciando el servidor en el puerto: '%d'", config.server_port);
+   if (httpd_start(&server, &config) == ESP_OK) {
+      ESP_LOGI(TAG_SERVER, "Registrando manejadores de URI");
+      httpd_register_uri_handler(server, &infoSite);
+      return server;
+   }
+
+   ESP_LOGE(TAG_SERVER, "Error starting server!");
+   return NULL;
+}
+
+const char *format_mac_address(const uint8_t mac[6]) {
+   static char mac_str[18];
+   snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+   return mac_str;
+}
+
+void wifi_event_handler(void *event_handler_arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+   switch (event_id) {
+      case WIFI_EVENT_AP_START:
+         xEventGroupSetBits(wifi_event_group, WIFI_AP_STARTED_BIT);
+         ESP_LOGI(TAG_WIFI_AP, "Access Point started");
+         break;
+      case WIFI_EVENT_AP_STOP:
+         ESP_LOGI(TAG_WIFI_AP, "Access Point stopped");
+         break;
+      case WIFI_EVENT_AP_STACONNECTED:
+         wifi_event_ap_staconnected_t *event_ap_staconnected = (wifi_event_ap_staconnected_t *)event_data;
+         ESP_LOGI(TAG_WIFI_AP, "%s connected to AP, ID: %d", format_mac_address(event_ap_staconnected->mac),
+                  event_ap_staconnected->aid);
+         break;
+      case WIFI_EVENT_AP_STADISCONNECTED:
+         wifi_event_ap_stadisconnected_t *event_ap_stadisconnected = (wifi_event_ap_stadisconnected_t *)event_data;
+         ESP_LOGI(TAG_WIFI_AP, "%s disconnected from AP, ID: %d", format_mac_address(event_ap_stadisconnected->mac),
+                  event_ap_stadisconnected->aid);
+         break;
+      default:
+         ESP_LOGW(TAG_WIFI_AP, "Unhandled event ID: %ld", event_id);
+         break;
+   }
+}
+
+esp_err_t getWifiCredentials() {
+   nvs_handle_t nvs_handle;
+   esp_err_t err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
+   if (err != ESP_OK) {
+      ESP_LOGE(TAG_NVS, "Error (%s) opening NVS handle", esp_err_to_name(err));
+      return ESP_ERR_NVS_NOT_FOUND;
+   }
+   size_t device_size = sizeof(deviceNumber);
+   size_t ssid_size = sizeof(ssid);
+   size_t pass_size = sizeof(pass);
+   if (nvs_get_str(nvs_handle, "deviceNumber", deviceNumber, &device_size) != ESP_OK) {
+      ESP_LOGW(TAG_NVS, "Error getting device number");
+      return ESP_ERR_NVS_NOT_FOUND;
+   }
+   if (nvs_get_str(nvs_handle, "ssid", ssid, &ssid_size) != ESP_OK) {
+      ESP_LOGE(TAG_NVS, "Error getting SSID");
+      return ESP_ERR_NVS_NOT_FOUND;
+   }
+   if (nvs_get_str(nvs_handle, "pass", pass, &pass_size) != ESP_OK) {
+      ESP_LOGE(TAG_NVS, "Error getting password");
+      return ESP_ERR_NVS_NOT_FOUND;
+   }
+   ESP_LOGW(TAG_NVS, "Device number: %s, SSID: %s, Password: %s", deviceNumber, ssid, pass);
+   nvs_close(nvs_handle);
+   return ESP_OK;
+}
+
+void wifi_init() {
+   wifi_event_group = xEventGroupCreate();
+   esp_netif_init();
+   esp_event_loop_create_default();
+
+   wifi_init_config_t wifi_initiation = WIFI_INIT_CONFIG_DEFAULT();
+   esp_wifi_init(&wifi_initiation);
+
+   esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL);
+   esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_event_handler, NULL);
+
+   esp_netif_create_default_wifi_ap();
+   wifi_config_t wifi_config = {.ap = {.ssid = AP_SSID, .max_connection = 4, .authmode = WIFI_AUTH_OPEN}};
+   esp_wifi_set_mode(WIFI_MODE_AP);
+   esp_wifi_set_config(ESP_IF_WIFI_AP, &wifi_config);
+   esp_wifi_start();
+   ESP_LOGW(TAG_WIFI_AP, "Wi-Fi AP started as SSID: %s", AP_SSID);
+}
+
 esp_err_t device_register_read(uint8_t reg_addr, uint8_t *data, size_t len) {
    return i2c_master_write_read_device(I2C_MASTER_NUM, BME280_I2C_ADDR_SEC, &reg_addr, 1, data, len,
                                        I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
@@ -43,39 +297,37 @@ esp_err_t i2c_master_init(void) {
 void bme280_delay_us(uint32_t period, void *intf_ptr) { vTaskDelay(period / portTICK_PERIOD_MS); }
 
 void bme280_config_init(struct bme280_dev *dev, struct bme280_settings *settings) {
-   int8_t rslt = BME280_OK;
-
    dev->chip_id = BME280_I2C_ADDR_SEC;
    dev->intf = BME280_I2C_INTF;
    dev->read = (bme280_read_fptr_t)device_register_read;
    dev->write = (bme280_write_fptr_t)device_register_write_byte;
    dev->delay_us = (bme280_delay_us_fptr_t)bme280_delay_us;
-   rslt = bme280_init(dev);
+   bme280_init(dev);
 
    settings->osr_h = BME280_OVERSAMPLING_1X;
    settings->osr_p = BME280_OVERSAMPLING_16X;
    settings->osr_t = BME280_OVERSAMPLING_2X;
    settings->filter = BME280_FILTER_COEFF_16;
    settings->standby_time = BME280_STANDBY_TIME_0_5_MS;
-   rslt = bme280_set_sensor_settings(BME280_SEL_ALL_SETTINGS, settings, dev);
+   bme280_set_sensor_settings(BME280_SEL_ALL_SETTINGS, settings, dev);
 }
 
-uint8_t readRegisters(struct bme280_data *sensor_data, struct bme280_dev *dev) {
+uint8_t read_BME280_registers(struct bme280_data *sensor_data, struct bme280_dev *dev) {
    uint8_t rslt = BME280_OK;
-   uint8_t reg_data[BME280_LEN_P_T_H_DATA] = {0};
    rslt = bme280_get_sensor_data(BME280_ALL, sensor_data, dev);
    return rslt;
 }
 
-void send_sensor_data_binary(struct bme280_data *sensor_data, uint8_t who_am_i) {
-   struct sensor_packet packet = {
-       .who_am_i = who_am_i,  // sanity check
-       .temperature = sensor_data->temperature,
-       .pressure = sensor_data->pressure,
-       .humidity = sensor_data->humidity,
+void send_sensor_data_binary(sensors_data_struct_t *sensors_data_struct) {
+   sensors_packet_t packet = {
+       .who_am_i = sensors_data_struct->who_am_i,
+       .temperature = sensors_data_struct->sensor_data.temperature,
+       .pressure = sensors_data_struct->sensor_data.pressure / 1000,  // Convert to kPa
+       .humidity = sensors_data_struct->sensor_data.humidity,
+       .gyro = sensors_data_struct->gyro,
    };
-   ESP_LOGI(TAG_FUNCTIONS, "Sending sensor data: who_am_i=0x%x, temp=%.1f, press=%.1f, humid=%.2f", packet.who_am_i,
-            packet.temperature, packet.pressure, packet.humidity);
+   ESP_LOGI(TAG_FUNCTIONS, "Sending sensor data: who_am_i=0x%x, temp=%.1f, press=%.1f, humid=%.2f, gyro=%.2f",
+            packet.who_am_i, packet.temperature, packet.pressure, packet.humidity, packet.gyro);
    tcp_send(sock, &packet, sizeof(packet));
 }
 
@@ -83,15 +335,70 @@ void delaySeconds(uint32_t seconds) { vTaskDelay(seconds * SECOND_IN_MILLIS / po
 
 void delayMillis(uint32_t millis) { vTaskDelay(millis / portTICK_PERIOD_MS); }
 
-void bme280_task(void *pvParameters) {
-   bme280_data_struct_t *bme280_data_struct = (bme280_data_struct_t *)pvParameters;
+void sensors_task(void *pvParameters) {
+   sensors_data_struct_t *sensors_data_struct = (sensors_data_struct_t *)pvParameters;
    int8_t rslt = BME280_OK;
 
    while (1) {
-      rslt = bme280_set_sensor_mode(BME280_POWERMODE_FORCED, &bme280_data_struct->dev);
-      rslt = device_register_read(BME280_REG_CHIP_ID, &bme280_data_struct->who_am_i, 1);
-      rslt = readRegisters(&bme280_data_struct->sensor_data, &bme280_data_struct->dev);
-      send_sensor_data_binary(&bme280_data_struct->sensor_data, bme280_data_struct->who_am_i);
+      rslt = bme280_set_sensor_mode(BME280_POWERMODE_FORCED, &sensors_data_struct->dev);
+      rslt = device_register_read(BME280_REG_CHIP_ID, &sensors_data_struct->who_am_i, 1);
+      rslt = read_BME280_registers(&sensors_data_struct->sensor_data, &sensors_data_struct->dev);
+      sensors_data_struct->gyro = mpu6050_read_gyro_x();
+      send_sensor_data_binary(sensors_data_struct);
       delaySeconds(1);
    }
+}
+
+void i2c_sensor_init() {
+   i2c_config_t conf = {
+       .mode = I2C_MODE_MASTER,
+       .sda_io_num = I2C_MASTER_SDA_IO,
+       .scl_io_num = I2C_MASTER_SCL_IO,
+       .sda_pullup_en = GPIO_PULLUP_ENABLE,
+       .scl_pullup_en = GPIO_PULLUP_ENABLE,
+       .master.clk_speed = I2C_MASTER_CLK,
+   };
+   i2c_param_config(I2C_MASTER_NUM, &conf);
+   i2c_driver_install(I2C_MASTER_NUM, conf.mode, 0, 0, 0);
+}
+
+void mpu6050_init() {
+   uint8_t data = 0;
+   i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+   i2c_master_start(cmd);
+   i2c_master_write_byte(cmd, (MPU6050_ADDR << 1) | I2C_MASTER_WRITE, true);
+   i2c_master_write_byte(cmd, MPU6050_REG_PWR_MGMT_1, true);
+   i2c_master_write_byte(cmd, data, true);
+   i2c_master_stop(cmd);
+   i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, 1000 / portTICK_PERIOD_MS);
+   i2c_cmd_link_delete(cmd);
+}
+
+float mpu6050_read_gyro_x() {
+   uint8_t data_h, data_l;
+   i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+   // Leer el byte alto
+   i2c_master_start(cmd);
+   i2c_master_write_byte(cmd, (MPU6050_ADDR << 1) | I2C_MASTER_WRITE, true);
+   i2c_master_write_byte(cmd, MPU6050_REG_GYRO_XOUT_H, true);
+   i2c_master_stop(cmd);
+   i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, 1000 / portTICK_PERIOD_MS);
+   i2c_cmd_link_delete(cmd);
+
+   // Leer el byte bajo
+   cmd = i2c_cmd_link_create();
+   i2c_master_start(cmd);
+   i2c_master_write_byte(cmd, (MPU6050_ADDR << 1) | I2C_MASTER_READ, true);
+   i2c_master_read_byte(cmd, &data_h, I2C_MASTER_ACK);
+   i2c_master_read_byte(cmd, &data_l, I2C_MASTER_NACK);
+   i2c_master_stop(cmd);
+   i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, 1000 / portTICK_PERIOD_MS);
+   i2c_cmd_link_delete(cmd);
+
+   int16_t gyro_value = (data_h << 8) | data_l;
+
+   float gyro_value_deg = gyro_value / MPU6050_GYRO_SENSITIVITY_250DPS;
+
+   return gyro_value_deg;
 }

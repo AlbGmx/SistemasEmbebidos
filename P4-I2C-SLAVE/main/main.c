@@ -93,9 +93,12 @@ int16_t mpu6050_read_gyro_x() {
 
    int16_t gyro_value = (data_h << 8) | data_l;
 
+   if (gyro_value > 5000) {
+    
+   
    // Agrega un mensaje de depuración aquí
    printf("Giroscopio leído: %d (%02X %02X)\n", gyro_value, data_h, data_l);
-
+   }
    return gyro_value;
 }
 
@@ -109,24 +112,17 @@ void send_gyro_data_to_master() {
    };
 
    // Imprimir los datos que se enviarán al maestro
-   printf("Enviando respuesta al maestro: %02X %02X %02X %02X\n", response[0], response[1], response[2], response[3]);
 
    // Inicia el comando para enviar la respuesta
 
-   i2c_slave_write_buffer(I2C_SLAVE_NUM, response, 4, -1);
+   // i2c_slave_write_buffer(I2C_SLAVE_NUM, response, 4, -1);
 }
 
 void i2c_slave_task() {
    uint8_t data[2];
    while (1) {
-      int ret = i2c_slave_read_buffer(I2C_SLAVE_NUM, data, sizeof(data), portMAX_DELAY);
-      if (ret > 0) {
-         printf("Solicitud recibida del máster: %02X %02X\n", data[0], data[1]);
-         if (data[0] == HEADER && data[1] == CMD_REQUEST_DATA) {
-            printf("Comando de solicitud de datos recibido\n");
             send_gyro_data_to_master();
-         }
-      }
+         vTaskDelay(100 / portTICK_PERIOD_MS);
    }
 }
 

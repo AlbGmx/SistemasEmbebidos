@@ -22,10 +22,9 @@
 #define TCP_CONNECTED_BIT BIT0
 #define SENSOR_DATA_READ_BIT BIT1
 
-static const char *TAG_TCP = "TCP";
 extern int sock;
 extern EventGroupHandle_t tcp_event_group;
-extern bme280_data_struct_t bme280_data_struct;
+extern sensors_data_struct_t sensors_data_struct;
 
 void tcp_send(int sock, const void *data, size_t len);
 void tcp_receive_task(void *pvParameters);
