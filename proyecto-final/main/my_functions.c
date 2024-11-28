@@ -4,13 +4,13 @@
 
 EventGroupHandle_t wifi_event_group = NULL;
 static const char *TAG_FUNCTIONS = "Custom Functions";
-static const char *TAG_NVS = "NVS";
 static const char *TAG_WIFI_AP = "WiFI AP";
 static const char *TAG_SERVER = "Server";
 httpd_handle_t server;
 char deviceNumber[MAX_CHAR] = {0};
 char ssid[MAX_CHAR] = {0};
 char pass[MAX_CHAR] = {0};
+bool trigger_alert = false;
 
 const httpd_uri_t infoSite = {
     .uri = "/info",
@@ -48,63 +48,15 @@ int read_led() {
    return led_state;
 }
 
-float read_temperature() { return sensors_data_struct.sensor_data.temperature; }
+float read_temperature(uint8_t device_id) { return sensors_data_struct[device_id].sensor_data.temperature; }
 
-float read_humidity() { return sensors_data_struct.sensor_data.humidity; }
+float read_humidity(uint8_t device_id) { return sensors_data_struct[device_id].sensor_data.humidity; }
 
-float read_pressure() { return sensors_data_struct.sensor_data.pressure; }
+float read_pressure(uint8_t device_id) { return sensors_data_struct[device_id].sensor_data.pressure; }
 
-float read_gyroscope() { return sensors_data_struct.gyro; }
-
-esp_err_t set_nvs_creds_and_name(const char *ssid, const char *pass, char *deviceNumber) {
-   nvs_handle_t nvs_handle;
-   ESP_LOGI(TAG_NVS, "Setting %s, %s, %s", ssid, pass, deviceNumber);
-   esp_err_t err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
-   if (err != ESP_OK) {
-      ESP_LOGE(TAG_NVS, "Error (%s) opening NVS handle", esp_err_to_name(err));
-      return err;
-   }
-   if (nvs_set_str(nvs_handle, "deviceNumber", deviceNumber) != ESP_OK) {
-      ESP_LOGE(TAG_NVS, "Error setting device name");
-      return ESP_ERR_NVS_NOT_FOUND;
-   }
-   if (nvs_set_str(nvs_handle, "ssid", ssid) != ESP_OK) {
-      ESP_LOGE(TAG_NVS, "Error setting SSID");
-      return ESP_ERR_NVS_NOT_FOUND;
-   }
-   if (nvs_set_str(nvs_handle, "pass", pass) != ESP_OK) {
-      ESP_LOGE(TAG_NVS, "Error setting password");
-      return ESP_ERR_NVS_NOT_FOUND;
-   }
-   nvs_close(nvs_handle);
-   return ESP_OK;
-}
-
-void url_decode(char *str) {
-   char *source = str;
-   char *destination = str;
-   while (*source) {
-      if (*source == '%') {
-         if (isxdigit((unsigned char)source[1]) && isxdigit((unsigned char)source[2])) {
-            char hex[3] = {source[1], source[2], '\0'};
-            *destination = (char)strtol(hex, NULL, 16);
-            source += 3;
-         } else {
-            *destination = *source++;
-         }
-      } else if (*source == '+') {
-         *destination = ' ';
-         source++;
-      } else {
-         *destination = *source++;
-      }
-      destination++;
-   }
-   *destination = '\0';
-}
+float read_gyroscope(uint8_t device_id) { return sensors_data_struct[device_id].gyro; }
 
 esp_err_t info_get_handler(httpd_req_t *req) {
-   bool trigger_alert = false;
    char *auxStr =
        "<div class=\"data\">\n"
        "<p><span>Gyroscope:</span> %.2f°/s</p>\n"
@@ -125,19 +77,16 @@ esp_err_t info_get_handler(httpd_req_t *req) {
    httpd_resp_set_type(req, "text/html");
    httpd_resp_send_chunk(req, (const char *)info_start, info_len);
 
-   float temperature = read_temperature();
-   float pressure = read_pressure();
-   float humidity = read_humidity();
-   float gyro = read_gyroscope();
-
-   trigger_alert = temperature > 30.0;
+   if (history[0].data[0].temperature > 30.0 || history[1].data[0].temperature > 30.0) trigger_alert = true;
    snprintf(infoHtml, info_len, "<div class=\"segment\" id=\"segment1\">\n<h2>Inside Package</h2>\n");
    httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
-   snprintf(infoHtml, info_len, auxStr, gyro, temperature, pressure, humidity);
+   snprintf(infoHtml, info_len, auxStr, history[0].data->gyro, history[0].data->temperature, history[0].data->pressure,
+            history[0].data->humidity);
    httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
    snprintf(infoHtml, info_len, "<div class=\"segment\" id=\"segment2\">\n<h2>Ouside Package</h2>\n");
    httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
-   snprintf(infoHtml, info_len, auxStr, gyro, temperature, pressure, humidity);
+   snprintf(infoHtml, info_len, auxStr, history[1].data->gyro, history[1].data->temperature, history[1].data->pressure,
+            history[1].data->humidity);
    httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
    if (trigger_alert) {
       snprintf(infoHtml, info_len,
@@ -148,13 +97,50 @@ esp_err_t info_get_handler(httpd_req_t *req) {
                "</div>\n");
       httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
    }
+
+   for (int i = 0; i < 2; i++) {
+      snprintf(infoHtml, info_len,
+               "<div class='table-container'>\n"  // Open table container
+               "<h1>%s</h1>\n"
+               "<table border='0'>\n"
+               "<tr>\n"
+               "<th>#</th>\n"
+               "<th>Temperature<br>(°C)</th>\n"
+               "<th>Pressure<br>(KPa)</th>\n"
+               "<th>Humidity<br>(%%)</th>\n"
+               "<th>Gyro<br>(°/s)</th>\n"
+               "</tr>\n",
+               (i == 0) ? "Inside Package" : "Outside Package");
+
+      httpd_resp_send_chunk(req, infoHtml, HTTPD_RESP_USE_STRLEN);
+
+      for (int j = 0; j < history[i].count; j++) {
+         char row[BUFFER_MAX];
+         int length = 0;
+
+         length += snprintf(row + length, sizeof(row) - length, "<tr>\n");
+         length += snprintf(row + length, sizeof(row) - length, "<td>%d</td>\n", j + 1);
+         length += snprintf(row + length, sizeof(row) - length, "<td>%.2f</td>\n", history[i].data[j].temperature);
+         length += snprintf(row + length, sizeof(row) - length, "<td>%.2f</td>\n", history[i].data[j].pressure);
+         length += snprintf(row + length, sizeof(row) - length, "<td>%.2f</td>\n", history[i].data[j].humidity);
+         length += snprintf(row + length, sizeof(row) - length, "<td>%.2f</td>\n", history[i].data[j].gyro);
+         length += snprintf(row + length, sizeof(row) - length, "</tr>\n");
+         httpd_resp_send_chunk(req, row, HTTPD_RESP_USE_STRLEN);
+      }
+
+      httpd_resp_send_chunk(req, "</table>\n</div>\n<br>\n", HTTPD_RESP_USE_STRLEN);
+   }
+
+   // Send the closing part of the HTML structure
    httpd_resp_send_chunk(req,
                          "<footer>\n"
                          "<p>&copy; 2024 Sensor Dashboard | Sistemas Embebidos </p>\n"
                          "</footer>\n"
                          "</html>\n",
                          HTTPD_RESP_USE_STRLEN);
+
    httpd_resp_send_chunk(req, NULL, 0);
+
    if (httpd_req_get_hdr_value_len(req, "Host") == 0) {
       ESP_LOGI(TAG_SERVER, "Request headers lost");
    }
@@ -203,38 +189,12 @@ void wifi_event_handler(void *event_handler_arg, esp_event_base_t event_base, in
          wifi_event_ap_stadisconnected_t *event_ap_stadisconnected = (wifi_event_ap_stadisconnected_t *)event_data;
          ESP_LOGI(TAG_WIFI_AP, "%s disconnected from AP, ID: %d", format_mac_address(event_ap_stadisconnected->mac),
                   event_ap_stadisconnected->aid);
+
          break;
       default:
          ESP_LOGW(TAG_WIFI_AP, "Unhandled event ID: %ld", event_id);
          break;
    }
-}
-
-esp_err_t getWifiCredentials() {
-   nvs_handle_t nvs_handle;
-   esp_err_t err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
-   if (err != ESP_OK) {
-      ESP_LOGE(TAG_NVS, "Error (%s) opening NVS handle", esp_err_to_name(err));
-      return ESP_ERR_NVS_NOT_FOUND;
-   }
-   size_t device_size = sizeof(deviceNumber);
-   size_t ssid_size = sizeof(ssid);
-   size_t pass_size = sizeof(pass);
-   if (nvs_get_str(nvs_handle, "deviceNumber", deviceNumber, &device_size) != ESP_OK) {
-      ESP_LOGW(TAG_NVS, "Error getting device number");
-      return ESP_ERR_NVS_NOT_FOUND;
-   }
-   if (nvs_get_str(nvs_handle, "ssid", ssid, &ssid_size) != ESP_OK) {
-      ESP_LOGE(TAG_NVS, "Error getting SSID");
-      return ESP_ERR_NVS_NOT_FOUND;
-   }
-   if (nvs_get_str(nvs_handle, "pass", pass, &pass_size) != ESP_OK) {
-      ESP_LOGE(TAG_NVS, "Error getting password");
-      return ESP_ERR_NVS_NOT_FOUND;
-   }
-   ESP_LOGW(TAG_NVS, "Device number: %s, SSID: %s, Password: %s", deviceNumber, ssid, pass);
-   nvs_close(nvs_handle);
-   return ESP_OK;
 }
 
 void wifi_init() {
@@ -320,14 +280,14 @@ uint8_t read_BME280_registers(struct bme280_data *sensor_data, struct bme280_dev
 
 void send_sensor_data_binary(sensors_data_struct_t *sensors_data_struct) {
    sensors_packet_t packet = {
-       .who_am_i = sensors_data_struct->who_am_i,
+       .device_id = sensors_data_struct->device_id,
        .temperature = sensors_data_struct->sensor_data.temperature,
        .pressure = sensors_data_struct->sensor_data.pressure / 1000,  // Convert to kPa
        .humidity = sensors_data_struct->sensor_data.humidity,
        .gyro = sensors_data_struct->gyro,
    };
-   ESP_LOGI(TAG_FUNCTIONS, "Sending sensor data: who_am_i=0x%x, temp=%.1f, press=%.1f, humid=%.2f, gyro=%.2f",
-            packet.who_am_i, packet.temperature, packet.pressure, packet.humidity, packet.gyro);
+   ESP_LOGI(TAG_FUNCTIONS, "Sending sensor data: device_id=0x%x, temp=%.1f, press=%.1f, humid=%.2f, gyro=%.2f",
+            packet.device_id, packet.temperature, packet.pressure, packet.humidity, packet.gyro);
    tcp_send(sock, &packet, sizeof(packet));
 }
 
@@ -337,15 +297,13 @@ void delayMillis(uint32_t millis) { vTaskDelay(millis / portTICK_PERIOD_MS); }
 
 void sensors_task(void *pvParameters) {
    sensors_data_struct_t *sensors_data_struct = (sensors_data_struct_t *)pvParameters;
-   int8_t rslt = BME280_OK;
 
    while (1) {
-      rslt = bme280_set_sensor_mode(BME280_POWERMODE_FORCED, &sensors_data_struct->dev);
-      rslt = device_register_read(BME280_REG_CHIP_ID, &sensors_data_struct->who_am_i, 1);
-      rslt = read_BME280_registers(&sensors_data_struct->sensor_data, &sensors_data_struct->dev);
+      bme280_set_sensor_mode(BME280_POWERMODE_FORCED, &sensors_data_struct->dev);
+      read_BME280_registers(&sensors_data_struct->sensor_data, &sensors_data_struct->dev);
       sensors_data_struct->gyro = mpu6050_read_gyro_x();
       send_sensor_data_binary(sensors_data_struct);
-      delaySeconds(1);
+      delaySeconds(DATA_SEND_RATE);
    }
 }
 
@@ -401,4 +359,28 @@ float mpu6050_read_gyro_x() {
    float gyro_value_deg = gyro_value / MPU6050_GYRO_SENSITIVITY_250DPS;
 
    return gyro_value_deg;
+}
+
+void init_history(sensors_packet_history_t *history) {
+   memset(history, 0, sizeof(sensors_packet_history_t));
+   history->head = -1;  // Ningún dato almacenado al inicio
+   history->count = 0;
+}
+
+void add_to_history(sensors_packet_history_t *history, sensors_packet_t *new_data, uint8_t device_id) {
+   history[device_id].head = (history[device_id].head + 1) % HISTORY_SIZE;
+   history[device_id].data[history[device_id].head] = *new_data;
+   if (history[device_id].count < HISTORY_SIZE) {
+      history[device_id].count++;
+   }
+}
+
+void print_history(sensors_packet_history_t *history) {
+   ESP_LOGI(TAG_FUNCTIONS, "Historial de datos (últimos %d registros):\n", history->count);
+   for (int i = 0; i < history->count; i++) {
+      int index = (history->head + HISTORY_SIZE - i) % HISTORY_SIZE;  // Obtener el índice en orden inverso
+      const sensors_packet_t *packet = &history->data[index];
+      ESP_LOGI(TAG_FUNCTIONS, "ID: %d, Temp: %.2f, Pres: %.2f, Hum: %.2f, Gyro: %.2f\n", packet->device_id,
+               packet->temperature, packet->pressure, packet->humidity, packet->gyro);
+   }
 }

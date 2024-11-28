@@ -12,12 +12,17 @@
 #include "nvs_flash.h"
 #include "protocol_examples_common.h"
 
-sensors_data_struct_t sensors_data_struct = {
-    .who_am_i = 0,
-    .dev = {0},
-    .sensor_data = {0},
-    .settings = {0},
-    .gyro = 0,
+#define DEVICE_ID 1
+
+sensors_data_struct_t sensors_data_struct[2] = {
+    {
+        .device_id = DEVICE_ID,
+        .dev = {0},
+        .sensor_data = {0},
+        .settings = {0},
+        .gyro = 0,
+    },
+    {0},
 };
 extern int sock;
 
@@ -28,7 +33,7 @@ void app_main(void) {
    ESP_ERROR_CHECK(esp_event_loop_create_default());
    ESP_ERROR_CHECK(example_connect());
 
-   bme280_config_init(&sensors_data_struct.dev, &sensors_data_struct.settings);
+   bme280_config_init(&sensors_data_struct[0].dev, &sensors_data_struct[0].settings);
    mpu6050_init();
    xTaskCreate(tcp_client_task, "tcp_client_task", 4096, NULL, 5, NULL);
    xTaskCreate(sensors_task, "sensors_task", 4096, (void *)&sensors_data_struct, 5, NULL);

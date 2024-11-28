@@ -10,48 +10,17 @@ void tcp_send(int sock, const void *data, size_t data_size) {
    int err = send(sock, data, data_size, 0);
    if (err < 0) {
       ESP_LOGE(TAG_TCP, "Error occurred during sending: errno %d", errno);
+      esp_restart();
    } else {
       ESP_LOGI(TAG_TCP, "Message sent, size: %d bytes", data_size);
    }
 }
 
-void tcp_receive_task(void *pvParameters) {
-   if (sock < 0) {
-      ESP_LOGE(TAG_TCP, "Socket is invalid or closed");
-      return;
-   }
-
-   while (true) {
-      ESP_LOGI(TAG_TCP, "Waiting for data");
-
-      xEventGroupWaitBits(tcp_event_group, TCP_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
-
-      sensors_packet_t received_packet;
-
-      struct timeval timeout;
-      timeout.tv_sec = portMAX_DELAY;
-      timeout.tv_usec = 0;
-      setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
-      int bytes = recv(sock, (uint8_t *)&received_packet, sizeof(received_packet), 0);
-      if (bytes < 0) {
-         ESP_LOGE(TAG_TCP, "Error receiving data: errno %d", errno);
-         break;
-      }
-      if (bytes == 0) {
-         ESP_LOGW(TAG_TCP, "Connection closed by peer");
-         break;
-      }
-      ESP_LOGI(TAG_TCP, "Received %d bytes sensor data: who_am_i=0x%x, temp=%.1f, press=%.1f, humid=%.2f, gyro=%.2f",
-               bytes, received_packet.who_am_i, received_packet.temperature, received_packet.pressure,
-               received_packet.humidity, received_packet.gyro);
-      sensors_data_struct.who_am_i = received_packet.who_am_i;
-      sensors_data_struct.sensor_data.temperature = received_packet.temperature;
-      sensors_data_struct.sensor_data.pressure = received_packet.pressure;
-      sensors_data_struct.sensor_data.humidity = received_packet.humidity;
-      sensors_data_struct.gyro = received_packet.gyro;
-      delaySeconds(1);
-   }
+void tcp_data_received(sensors_packet_t *received_packet) {
+   if (received_packet->device_id < 2) {
+      add_to_history(history, received_packet, received_packet->device_id);
+   } else
+      ESP_LOGE(TAG_TCP, "Invalid device ID: %d, data not recorded", received_packet->device_id);
 }
 
 void tcp_client_task(void) {
@@ -96,6 +65,38 @@ void tcp_client_task(void) {
          close(sock);
       }
    }
+}
+
+void handle_connection(void *pvParameters) {
+   int sock = (int)pvParameters;
+   sensors_packet_t received_packet;
+
+   struct timeval timeout;
+   timeout.tv_sec = portMAX_DELAY;
+   timeout.tv_usec = 0;
+   setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+   while (true) {
+      ESP_LOGI(TAG_TCP, "Waiting for data");
+
+      int bytes = recv(sock, (uint8_t *)&received_packet, sizeof(received_packet), 0);
+      if (bytes < 0) {
+         ESP_LOGE(TAG_TCP, "Error receiving data: errno %d", errno);
+         break;
+      }
+      if (bytes == 0) {
+         ESP_LOGW(TAG_TCP, "Connection closed by peer");
+         break;
+      }
+      ESP_LOGI(TAG_TCP, "Received %d bytes sensor data: device number=%d, temp=%.1f, press=%.1f, humid=%.2f, gyro=%.2f",
+               bytes, received_packet.device_id, received_packet.temperature, received_packet.pressure,
+               received_packet.humidity, received_packet.gyro);
+      tcp_data_received(&received_packet);
+   }
+
+   shutdown(sock, 0);
+   close(sock);
+   vTaskDelete(NULL);  // Terminate this task when done.
 }
 
 void tcp_server_task(void *pvParameters) {
@@ -149,10 +150,6 @@ void tcp_server_task(void *pvParameters) {
          ESP_LOGE(TAG_TCP, "Unable to accept connection: errno %d", errno);
          break;
       }
-
-      ESP_LOGW(TAG_TCP, "Socket %d", sock);
-
-      // Set tcp keepalive option
       setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &keepAlive, sizeof(int));
       setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &keepIdle, sizeof(int));
       setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepInterval, sizeof(int));
@@ -161,14 +158,8 @@ void tcp_server_task(void *pvParameters) {
       if (source_addr.ss_family == PF_INET) {
          inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
       }
-      ESP_LOGI(TAG_TCP, "Socket accepted ip address: %s", addr_str);
-      xEventGroupSetBits(tcp_event_group, TCP_CONNECTED_BIT);
-      while (1) {
-         vTaskDelay(portMAX_DELAY);
-      }
-
-      shutdown(sock, 0);
-      close(sock);
+      ESP_LOGI(TAG_TCP, "Socket accepted ip address: %s, sock: %d", addr_str, sock);
+      xTaskCreate(handle_connection, "handle_connection", 4096, (void *)sock, tskIDLE_PRIORITY, NULL);
    }
 
 CLEAN_UP:

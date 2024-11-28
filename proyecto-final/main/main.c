@@ -4,28 +4,30 @@
 static const char *TAG = "Proyecto";
 
 // Global variables
-extern int sock;
 extern EventGroupHandle_t wifi_event_group;
 extern EventGroupHandle_t tcp_event_group;
 extern char deviceNumber[MAX_CHAR];
 extern char ssid[MAX_CHAR];
 extern char pass[MAX_CHAR];
 extern httpd_handle_t server;
-sensors_data_struct_t sensors_data_struct = {
-    .who_am_i = 0,
-    .dev = {0},
-    .sensor_data = {0},
-    .settings = {0},
-    .gyro = 0,
+
+sensors_data_struct_t sensors_data_struct[2] = {
+    {.device_id = 0},
+    {.device_id = 1},
+};
+
+sensors_packet_history_t history[2] = {
+    {.data = {}, .head = -1, .count = 0},
+    {.data = {}, .head = -1, .count = 0},
 };
 
 void app_main(void) {
    ESP_ERROR_CHECK(nvs_flash_init());
    wifi_init();
    gpio_init();
+   init_history(&history[0]);
+   init_history(&history[1]);
 
    server = start_webserver();
-   xTaskCreate(tcp_server_task, "tcp_server", 4096 * 8, (void *)sock, 5, NULL);
-   xEventGroupWaitBits(tcp_event_group, TCP_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
-   xTaskCreate(tcp_receive_task, "tcp_receive", 4096 * 8, (void *)sock, 5, NULL);
+   xTaskCreate(tcp_server_task, "tcp_server", 4096 * 8, NULL, 5, NULL);
 }

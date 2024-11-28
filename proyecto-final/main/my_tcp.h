@@ -20,14 +20,17 @@
 #define KEEPALIVE_COUNT 1
 #define BUFFER_MAX 4096
 #define TCP_CONNECTED_BIT BIT0
-#define SENSOR_DATA_READ_BIT BIT1
+#define TCP_CONNECTED_TWO_DEVICES_BIT BIT1
+#define SENSOR_DATA_READ_BIT BIT2
+#define SENSOR_DATA_RECEIVED_BIT BIT3
+#define WIFI_CONNECTED_BIT BIT4
 
-extern int sock;
 extern EventGroupHandle_t tcp_event_group;
-extern sensors_data_struct_t sensors_data_struct;
+extern sensors_data_struct_t sensors_data_struct[2];
+extern sensors_packet_history_t history[2];
 
 void tcp_send(int sock, const void *data, size_t len);
-void tcp_receive_task(void *pvParameters);
+void tcp_data_received(sensors_packet_t *received_packet);
 void tcp_client_task();
 void tcp_server_task(void *pvParameters);
 
